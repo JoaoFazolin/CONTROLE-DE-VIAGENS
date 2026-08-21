@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Viagens — LR Controle de Viagens</title>
+  <meta name="theme-color" content="#0b2545" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles/theme.css" />
+</head>
+<body>
+  <div id="cabecalho-app"></div>
+
+  <main>
+    <div id="aviso-pendentes" class="aviso aviso-pendente" style="display:none;"></div>
+    <div id="aviso-cadastro-offline" class="aviso aviso-pendente" style="display:none;">
+      Sem internet agora — usando os cadastros salvos da última sincronização.
+    </div>
+
+    <section class="cartao">
+      <h2>Nova viagem</h2>
+      <div id="aviso-form-erro" class="aviso aviso-erro" style="display:none;"></div>
+      <div id="aviso-form-sucesso" class="aviso aviso-sucesso" style="display:none;"></div>
+
+      <form id="form-viagem">
+        <label for="campo-data">Data</label>
+        <input type="date" id="campo-data" required />
+
+        <div id="campo-caminhao"></div>
+        <div id="campo-escavadeira"></div>
+        <div id="campo-local"></div>
+        <div id="campo-destino"></div>
+        <div id="campo-motorista"></div>
+
+        <label for="campo-total-viagens">Total de viagens nesse trajeto</label>
+        <input type="number" id="campo-total-viagens" min="1" value="1" required inputmode="numeric" />
+
+        <label for="campo-diesel">Diesel (litros) — opcional</label>
+        <input type="number" id="campo-diesel" min="0" step="0.1" inputmode="decimal" />
+
+        <div class="linha-botoes">
+          <button type="submit" class="btn btn-primario" id="btn-salvar-viagem">Salvar viagem</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="cartao">
+      <h2>Resumo do dia</h2>
+      <div class="resumo-dia">
+        <div>
+          <div class="valor" id="resumo-total-viagens">0</div>
+          <div class="rotulo">Total de viagens</div>
+        </div>
+        <div>
+          <div class="valor" id="resumo-motoristas">0</div>
+          <div class="rotulo">Motoristas distintos</div>
+        </div>
+        <div>
+          <div class="valor" id="resumo-diesel">0</div>
+          <div class="rotulo">Diesel (L)</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2>Viagens de hoje</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Ordem</th>
+              <th>Caminhão</th>
+              <th>Destino</th>
+              <th>Viagens</th>
+              <th>Motorista</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tabela-viagens-corpo"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="src/viagens.js"></script>
+</body>
+</html>

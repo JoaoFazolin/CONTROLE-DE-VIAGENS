@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Cadastros — LR Controle de Viagens</title>
+  <meta name="theme-color" content="#0b2545" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles/theme.css" />
+</head>
+<body>
+  <div id="cabecalho-app"></div>
+
+  <main>
+    <div id="aviso-erro" class="aviso aviso-erro" style="display:none;"></div>
+
+    <section class="cartao">
+      <h2>Caminhões</h2>
+      <form class="form-cadastro" data-recurso="caminhoes" data-campo="codigo">
+        <label>Código (ex: CB 236)</label>
+        <input type="text" name="valor" required />
+        <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+      </form>
+      <table><tbody id="lista-caminhoes"></tbody></table>
+    </section>
+
+    <section class="cartao">
+      <h2>Escavadeiras</h2>
+      <form class="form-cadastro" data-recurso="escavadeiras" data-campo="codigo">
+        <label>Código (ex: EH 349)</label>
+        <input type="text" name="valor" required />
+        <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+      </form>
+      <table><tbody id="lista-escavadeiras"></tbody></table>
+    </section>
+
+    <section class="cartao">
+      <h2>Locais de carga</h2>
+      <form class="form-cadastro" data-recurso="locais-carga" data-campo="nome">
+        <label>Nome do local</label>
+        <input type="text" name="valor" required />
+        <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+      </form>
+      <table><tbody id="lista-locais-carga"></tbody></table>
+    </section>
+
+    <section class="cartao">
+      <h2>Destinos</h2>
+      <form id="form-destino">
+        <label>Código (ex: AT.O, BF.O, AT.L)</label>
+        <input type="text" name="codigo" required />
+        <label>Descrição (o que esse código significa)</label>
+        <input type="text" name="descricao" placeholder="ex: Aterro - Obra" />
+        <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+      </form>
+      <table><tbody id="lista-destinos"></tbody></table>
+    </section>
+
+    <section class="cartao">
+      <h2>Motoristas</h2>
+      <form id="form-motorista">
+        <label>Nome</label>
+        <input type="text" name="nome" required />
+        <label>E-mail (login)</label>
+        <input type="email" name="email" required />
+        <label>Senha inicial</label>
+        <input type="password" name="senha" minlength="6" required />
+        <label>Papel</label>
+        <select name="role">
+          <option value="motorista">Motorista</option>
+          <option value="admin">Administrador</option>
+        </select>
+        <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+      </form>
+      <table><tbody id="lista-motoristas"></tbody></table>
+    </section>
+  </main>
+
+  <script type="module" src="src/cadastrosAdmin.js"></script>
+</body>
+</html>

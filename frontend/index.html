@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Entrar — LR Controle de Viagens</title>
+  <meta name="theme-color" content="#0b2545" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles/theme.css" />
+</head>
+<body>
+  <main style="max-width: 420px; padding-top: 12vh;">
+    <div class="cartao">
+      <h2 style="text-align:center; margin-bottom: 4px;">LR Controle de Viagens</h2>
+      <p style="text-align:center; color: var(--cor-texto-suave); margin-top:0;">LR Campos Cia &amp; Ltda</p>
+
+      <div id="aviso-erro" class="aviso aviso-erro" style="display:none;"></div>
+
+      <form id="form-login">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" autocomplete="username" required />
+
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" autocomplete="current-password" required />
+
+        <div class="linha-botoes">
+          <button type="submit" class="btn btn-primario" id="btn-entrar">Entrar</button>
+        </div>
+      </form>
+    </div>
+    <p class="rodape-app">Funciona offline depois do primeiro login. Em obra sem sinal, os lançamentos ficam guardados no aparelho e são enviados sozinhos quando a internet voltar.</p>
+  </main>
+
+  <script type="module" src="src/login.js"></script>
+</body>
+</html>

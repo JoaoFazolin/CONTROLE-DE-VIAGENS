@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Relatórios — LR Controle de Viagens</title>
+  <meta name="theme-color" content="#0b2545" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles/theme.css" />
+</head>
+<body>
+  <div id="cabecalho-app"></div>
+
+  <main>
+    <section class="cartao">
+      <h2>Exportar relatório em Excel</h2>
+      <div id="aviso-erro" class="aviso aviso-erro" style="display:none;"></div>
+
+      <label for="campo-inicio">De</label>
+      <input type="date" id="campo-inicio" required />
+
+      <label for="campo-fim">Até</label>
+      <input type="date" id="campo-fim" required />
+
+      <div class="linha-botoes">
+        <button type="button" class="btn btn-primario" id="btn-exportar">Baixar planilha (.xlsx)</button>
+      </div>
+      <p style="color: var(--cor-texto-suave); font-size: 0.85rem;">
+        A planilha traz todas as viagens do período numa aba, e os totais por dia (viagens, diesel, motoristas distintos) em outra aba.
+      </p>
+    </section>
+  </main>
+
+  <script type="module" src="src/relatorios.js"></script>
+</body>
+</html>

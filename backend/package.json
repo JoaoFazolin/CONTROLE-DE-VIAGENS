@@ -1,0 +1,10 @@
+{
+  "name": "lr-controle-viagens-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Netlify Functions do sistema de Controle de Viagens (LR Campos Cia & Ltda).",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "exceljs": "^4.4.0"
+  }
+}

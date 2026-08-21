@@ -1,0 +1,298 @@
+/* ============================================================================
+   LR Controle de Viagens — tema de alto contraste, pensado pra leitura de
+   tela em pleno sol (obra/canteiro):
+   - fundo claro (telas escuras refletem mais luz e "lavam" no sol)
+   - texto quase preto sobre branco/cinza claríssimo = contraste máximo
+   - azul-marinho no cabeçalho/navegação (identidade, sóbrio)
+   - laranja de alta saturação (cor de sinalização) só nas ações que importam
+   - alvos de toque grandes (min 44px) para uso com luva/dedo em tablet
+   ============================================================================ */
+
+:root {
+  --cor-fundo: #f4f5f7;
+  --cor-superficie: #ffffff;
+  --cor-texto: #14181f;
+  --cor-texto-suave: #4b5563;
+  --cor-borda: #d7dbe1;
+
+  --cor-marca: #0b2545;       /* azul-marinho — header, nav, títulos */
+  --cor-marca-clara: #13355e;
+
+  --cor-acao: #ff6b00;        /* laranja de sinalização — ações primárias */
+  --cor-acao-escura: #cc5500;
+  --cor-acao-texto: #ffffff;
+
+  --cor-sucesso: #1a7f37;
+  --cor-alerta: #b42318;
+  --cor-alerta-fundo: #fdecea;
+  --cor-pendente: #92400e;
+  --cor-pendente-fundo: #fff4e5;
+
+  --raio: 10px;
+  --sombra: 0 1px 3px rgba(11, 37, 69, 0.12);
+  --alvo-toque-min: 48px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-header {
+  background: var(--cor-marca);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: var(--sombra);
+}
+
+.app-header h1 {
+  font-size: 1.05rem;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.app-header .subtitulo {
+  font-size: 0.78rem;
+  color: #cdd8e6;
+  margin-top: 2px;
+}
+
+.app-header nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.app-header nav a,
+.app-header nav button {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  min-height: var(--alvo-toque-min);
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.app-header nav a.ativo,
+.app-header nav a:hover,
+.app-header nav button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: 96px;
+}
+
+.cartao {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.cartao h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  color: var(--cor-marca);
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--cor-texto-suave);
+  margin: 14px 0 6px;
+}
+
+label:first-child { margin-top: 0; }
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="datetime-local"],
+select,
+textarea {
+  width: 100%;
+  min-height: var(--alvo-toque-min);
+  padding: 12px 14px;
+  font-size: 1rem;
+  border: 1.5px solid var(--cor-borda);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--cor-texto);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 3px solid #9dc1ff;
+  border-color: var(--cor-marca);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--alvo-toque-min);
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-primario {
+  background: var(--cor-acao);
+  color: var(--cor-acao-texto);
+}
+.btn-primario:active { background: var(--cor-acao-escura); }
+.btn-primario:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-secundario {
+  background: #fff;
+  color: var(--cor-marca);
+  border: 1.5px solid var(--cor-marca);
+}
+
+.btn-perigo {
+  background: var(--cor-alerta);
+  color: #fff;
+}
+
+.btn-pequeno {
+  width: auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.linha-botoes {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.linha-botoes .btn { flex: 1; }
+
+.aviso {
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+}
+.aviso-erro { background: var(--cor-alerta-fundo); color: var(--cor-alerta); }
+.aviso-pendente { background: var(--cor-pendente-fundo); color: var(--cor-pendente); }
+.aviso-sucesso { background: #e9f7ef; color: var(--cor-sucesso); }
+
+.resumo-dia {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  text-align: center;
+}
+.resumo-dia .valor {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--cor-marca);
+}
+.resumo-dia .rotulo {
+  font-size: 0.72rem;
+  color: var(--cor-texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+th, td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--cor-borda);
+}
+th { color: var(--cor-texto-suave); font-size: 0.72rem; text-transform: uppercase; }
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.badge-pendente { background: var(--cor-pendente-fundo); color: var(--cor-pendente); }
+.badge-sincronizado { background: #e9f7ef; color: var(--cor-sucesso); }
+
+/* Combobox com busca (caminhão / escavadeira / motorista / destino) */
+.combobox { position: relative; }
+.combobox-lista {
+  position: absolute;
+  z-index: 20;
+  left: 0; right: 0;
+  top: calc(100% + 4px);
+  background: #fff;
+  border: 1.5px solid var(--cor-borda);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(11, 37, 69, 0.18);
+  max-height: 240px;
+  overflow-y: auto;
+  display: none;
+}
+.combobox-lista.aberta { display: block; }
+.combobox-opcao {
+  padding: 12px 14px;
+  min-height: var(--alvo-toque-min);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f1f3;
+}
+.combobox-opcao:last-child { border-bottom: none; }
+.combobox-opcao:hover,
+.combobox-opcao.destacada { background: #eef4ff; }
+.combobox-vazio { padding: 12px 14px; color: var(--cor-texto-suave); font-size: 0.85rem; }
+
+.rodape-app {
+  text-align: center;
+  color: var(--cor-texto-suave);
+  font-size: 0.75rem;
+  padding: 20px 0 8px;
+}
+
+/* Tablet/desktop: dá mais respiro sem quebrar o layout de coluna única */
+@media (min-width: 640px) {
+  main { padding: 24px; }
+  .resumo-dia { grid-template-columns: repeat(3, 1fr); }
+}

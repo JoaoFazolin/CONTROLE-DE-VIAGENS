@@ -1,0 +1,73 @@
+# Configuração do Netlify — precisa ficar na raiz do repositório (exigência
+# da própria Netlify), mesmo com o código das functions morando em backend/.
+
+[build]
+  base = "."
+  publish = "frontend"
+  functions = "backend/functions"
+  command = "cd backend && npm install"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Rotas amigáveis: o frontend chama /api/xxx, e aqui redirecionamos pra
+# /.netlify/functions/xxx (sem expor o caminho interno da Netlify no código).
+[[redirects]]
+  from = "/api/auth/login"
+  to = "/.netlify/functions/auth-login"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth/refresh"
+  to = "/.netlify/functions/auth-refresh"
+  status = 200
+
+[[redirects]]
+  from = "/api/me"
+  to = "/.netlify/functions/me"
+  status = 200
+
+[[redirects]]
+  from = "/api/caminhoes"
+  to = "/.netlify/functions/caminhoes"
+  status = 200
+
+[[redirects]]
+  from = "/api/escavadeiras"
+  to = "/.netlify/functions/escavadeiras"
+  status = 200
+
+[[redirects]]
+  from = "/api/locais-carga"
+  to = "/.netlify/functions/locais-carga"
+  status = 200
+
+[[redirects]]
+  from = "/api/destinos"
+  to = "/.netlify/functions/destinos"
+  status = 200
+
+[[redirects]]
+  from = "/api/motoristas"
+  to = "/.netlify/functions/motoristas"
+  status = 200
+
+[[redirects]]
+  from = "/api/viagens"
+  to = "/.netlify/functions/viagens"
+  status = 200
+
+[[redirects]]
+  from = "/api/resumo-dia"
+  to = "/.netlify/functions/resumo-dia"
+  status = 200
+
+[[redirects]]
+  from = "/api/relatorio-excel"
+  to = "/.netlify/functions/relatorio-excel"
+  status = 200
+
+# Observação: este app NÃO é uma SPA de página única — cada tela é um .html
+# próprio (index.html, app.html, cadastros.html, relatorios.html), então não
+# precisa (nem deve) ter redirect coringa "/* -> /index.html". A Netlify já
+# serve os arquivos estáticos de frontend/ normalmente.
