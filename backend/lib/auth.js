@@ -2,11 +2,21 @@
 // O frontend manda o access_token do Supabase Auth no header Authorization:
 // "Bearer <token>". Aqui validamos esse token com a service_role key e
 // carregamos o perfil (nome/role) da tabela profiles.
-const { getSupabaseAdmin } = require('./supabaseAdmin');
+const { getSupabaseAdmin, getSupabaseAnon } = require('./supabaseAdmin');
+
+// "Gerencia" = admin OU operador_avancado. Usado em todo módulo que o
+// Operador Avançado deve acessar por completo (cadastros de caminhão/
+// escavadeira/local/destino, relatório, dashboard, lançar viagem por
+// qualquer motorista). A tela de Motoristas e a edição/exclusão de
+// viagens já lançadas continuam exclusivas do admin — não usam esta
+// função, checam role === 'admin' diretamente.
+function podeGerenciar(profile) {
+  return !!profile && (profile.role === 'admin' || profile.role === 'operador_avancado');
+}
 
 /**
  * @param {object} event  evento da Netlify Function
- * @param {{ adminOnly?: boolean }} [options]
+ * @param {{ adminOnly?: boolean, gerenciaOnly?: boolean }} [options]
  * @returns {Promise<{ ok: true, user: { id: string, nome: string, role: string } } | { ok: false, statusCode: number, message: string }>}
  */
 async function requireAuth(event, options = {}) {
@@ -19,13 +29,15 @@ async function requireAuth(event, options = {}) {
     return { ok: false, statusCode: 401, message: 'Sessão ausente. Faça login novamente.' };
   }
 
-  const supabase = getSupabaseAdmin();
-
-  const { data: userData, error: userError } = await supabase.auth.getUser(token);
+  // getUser() só valida o token (assinatura/expiração) — a anon key basta
+  // pra isso, mesmo padrão do sistema de combustível.
+  const anon = getSupabaseAnon();
+  const { data: userData, error: userError } = await anon.auth.getUser(token);
   if (userError || !userData?.user) {
     return { ok: false, statusCode: 401, message: 'Sessão expirada ou inválida. Faça login novamente.' };
   }
 
+  const supabase = getSupabaseAdmin();
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('id, nome, role, ativo')
@@ -41,8 +53,11 @@ async function requireAuth(event, options = {}) {
   if (options.adminOnly && profile.role !== 'admin') {
     return { ok: false, statusCode: 403, message: 'Ação permitida apenas para administradores.' };
   }
+  if (options.gerenciaOnly && !podeGerenciar(profile)) {
+    return { ok: false, statusCode: 403, message: 'Ação permitida apenas para administradores e operadores avançados.' };
+  }
 
   return { ok: true, user: { id: profile.id, nome: profile.nome, role: profile.role } };
 }
 
-module.exports = { requireAuth };
+module.exports = { requireAuth, podeGerenciar };

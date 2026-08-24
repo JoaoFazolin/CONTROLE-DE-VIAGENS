@@ -1,12 +1,12 @@
-const { getSupabaseAdmin } = require('../lib/supabaseAdmin');
-const { json, noContentPreflight, safeJsonParse } = require('../lib/http');
+const { getSupabaseAnon } = require('../lib/supabaseAdmin');
+const { json, noContentPreflight, safeJsonParse, comTratamentoDeErro } = require('../lib/http');
 
-// POST /api/auth/refresh  { refresh_token }
+// POST /api/auth-refresh  { refresh_token }
 // Troca o refresh_token por um novo par access_token/refresh_token
 // (rotação automática). O frontend chama isso periodicamente em segundo
 // plano para a sessão nunca expirar sozinha, mesmo com o app fechado por
 // dias em campo.
-exports.handler = async function (event) {
+exports.handler = comTratamentoDeErro(async function (event) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   if (event.httpMethod !== 'POST') {
     return json(405, { erro: 'Método não permitido.' });
@@ -20,8 +20,8 @@ exports.handler = async function (event) {
     return json(400, { erro: 'refresh_token ausente.' });
   }
 
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+  const anon = getSupabaseAnon();
+  const { data, error } = await anon.auth.refreshSession({ refresh_token });
 
   if (error || !data?.session) {
     return json(401, { erro: 'Sessão não pôde ser renovada. Faça login novamente.' });
@@ -32,4 +32,4 @@ exports.handler = async function (event) {
     refresh_token: data.session.refresh_token,
     expires_at: data.session.expires_at,
   });
-};
+});

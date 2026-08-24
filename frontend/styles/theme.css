@@ -255,6 +255,82 @@ th { color: var(--cor-texto-suave); font-size: 0.72rem; text-transform: uppercas
 .badge-pendente { background: var(--cor-pendente-fundo); color: var(--cor-pendente); }
 .badge-sincronizado { background: #e9f7ef; color: var(--cor-sucesso); }
 
+/* Status de conexão + sincronizar agora, no cabeçalho */
+.status-conexao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #cdd8e6;
+}
+.status-conexao .ponto {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #6ee787;
+  flex-shrink: 0;
+}
+.status-conexao.offline .ponto { background: var(--cor-acao); }
+
+/* Modal de confirmação / edição */
+.modal-fundo {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 37, 69, 0.55);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+  padding: 0;
+}
+.modal-fundo.aberto { display: flex; }
+.modal-caixa {
+  background: var(--cor-superficie);
+  border-radius: var(--raio) var(--raio) 0 0;
+  padding: 20px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+@media (min-width: 640px) {
+  .modal-fundo { align-items: center; }
+  .modal-caixa { border-radius: var(--raio); }
+}
+.modal-caixa h2 { margin-top: 0; color: var(--cor-marca); }
+.resumo-confirmacao { list-style: none; padding: 0; margin: 0 0 16px; }
+.resumo-confirmacao li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cor-borda);
+  font-size: 0.92rem;
+}
+.resumo-confirmacao li span:first-child { color: var(--cor-texto-suave); }
+.resumo-confirmacao li span:last-child { font-weight: 700; text-align: right; }
+
+/* Gráficos de barra simples (Dashboard) — sem biblioteca externa */
+.grafico-barras { display: flex; flex-direction: column; gap: 10px; }
+.grafico-linha { display: grid; grid-template-columns: 110px 1fr 44px; align-items: center; gap: 10px; }
+.grafico-rotulo { font-size: 0.85rem; color: var(--cor-texto-suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grafico-trilha { background: var(--cor-fundo); border-radius: 999px; height: 16px; overflow: hidden; }
+.grafico-barra { background: var(--cor-acao); height: 100%; border-radius: 999px; min-width: 3px; }
+.grafico-valor { font-size: 0.85rem; font-weight: 700; text-align: right; color: var(--cor-marca); }
+.grafico-vazio { color: var(--cor-texto-suave); font-size: 0.85rem; padding: 8px 0; }
+
+/* Barra de filtros do histórico */
+.barra-filtros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.barra-filtros .campo-largo { grid-column: 1 / -1; }
+@media (min-width: 640px) {
+  .barra-filtros { grid-template-columns: repeat(4, 1fr); }
+}
+
 /* Combobox com busca (caminhão / escavadeira / motorista / destino) */
 .combobox { position: relative; }
 .combobox-lista {

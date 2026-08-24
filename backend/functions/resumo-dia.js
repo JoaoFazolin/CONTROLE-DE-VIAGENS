@@ -1,10 +1,10 @@
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin');
 const { requireAuth } = require('../lib/auth');
-const { json, noContentPreflight } = require('../lib/http');
+const { json, noContentPreflight, comTratamentoDeErro } = require('../lib/http');
 
 // GET /api/resumo-dia?data=YYYY-MM-DD
 // Soma total de viagens do dia e conta motoristas distintos que trabalharam.
-exports.handler = async function (event) {
+exports.handler = comTratamentoDeErro(async function (event) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   if (event.httpMethod !== 'GET') return json(405, { erro: 'Método não permitido.' });
 
@@ -32,4 +32,4 @@ exports.handler = async function (event) {
     motoristas_distintos: motoristasDistintos,
     registros: data.length,
   });
-};
+});

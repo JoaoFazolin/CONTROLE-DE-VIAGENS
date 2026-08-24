@@ -5,7 +5,8 @@ import { chamarApi, ErroApi } from './api.js';
 if (!exigirLogin()) throw new Error('redirecionando para login');
 
 const sessao = obterSessao();
-if (sessao.usuario.role !== 'admin') {
+const ehGerente = sessao.usuario.role === 'admin' || sessao.usuario.role === 'operador_avancado';
+if (!ehGerente) {
   window.location.href = 'app.html';
 }
 

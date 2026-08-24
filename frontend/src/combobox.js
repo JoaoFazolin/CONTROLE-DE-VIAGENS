@@ -73,8 +73,10 @@ export function criarCombobox({ container, rotulo, obrigatorio = false, placehol
     // pequeno atraso pra permitir o clique na opção antes de fechar
     setTimeout(() => {
       fecharLista();
-      // se o texto digitado não bateu com nenhuma opção, limpa a seleção
-      if (!valorSelecionadoId) input.value = '';
+      // se o texto digitado não bateu com nenhuma opção, limpa a seleção.
+      // Atenção: valorSelecionadoId pode ser '' de propósito (ex: opção
+      // "Todos" nos filtros) — só limpamos quando é null (nada escolhido).
+      if (valorSelecionadoId === null) input.value = '';
     }, 150);
   });
   input.addEventListener('keydown', (ev) => {

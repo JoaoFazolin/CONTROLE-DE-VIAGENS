@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Dashboard — LR Controle de Viagens</title>
+  <meta name="theme-color" content="#0b2545" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles/theme.css" />
+</head>
+<body>
+  <div id="cabecalho-app"></div>
+
+  <main>
+    <div id="aviso-erro" class="aviso aviso-erro" style="display:none;"></div>
+
+    <section class="cartao">
+      <h2>Período</h2>
+      <label for="campo-inicio">De</label>
+      <input type="date" id="campo-inicio" />
+      <label for="campo-fim">Até</label>
+      <input type="date" id="campo-fim" />
+    </section>
+
+    <section class="cartao">
+      <h2>Resumo do período</h2>
+      <div class="resumo-dia">
+        <div>
+          <div class="valor" id="dash-total-viagens">0</div>
+          <div class="rotulo">Total de viagens</div>
+        </div>
+        <div>
+          <div class="valor" id="dash-motoristas">0</div>
+          <div class="rotulo">Motoristas distintos</div>
+        </div>
+        <div>
+          <div class="valor" id="dash-diesel">0</div>
+          <div class="rotulo">Diesel (L)</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2>Viagens por dia</h2>
+      <div class="grafico-barras" id="grafico-por-dia"></div>
+    </section>
+
+    <section class="cartao">
+      <h2>Viagens por caminhão</h2>
+      <div class="grafico-barras" id="grafico-por-caminhao"></div>
+    </section>
+
+    <section class="cartao">
+      <h2>Viagens por destino</h2>
+      <div class="grafico-barras" id="grafico-por-destino"></div>
+    </section>
+  </main>
+
+  <script type="module" src="src/dashboard.js"></script>
+</body>
+</html>

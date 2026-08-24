@@ -1,17 +1,17 @@
 const ExcelJS = require('exceljs');
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin');
 const { requireAuth } = require('../lib/auth');
-const { json, noContentPreflight } = require('../lib/http');
+const { json, noContentPreflight, comTratamentoDeErro } = require('../lib/http');
 
 // GET /api/relatorio-excel?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
 // Gera um .xlsx com todas as viagens do período + uma aba de totais por dia.
-// Só admin. Devolve o arquivo em base64 (isBase64Encoded: true) — o
-// frontend transforma isso num Blob e dispara o download.
-exports.handler = async function (event) {
+// Admin e operador_avancado. Devolve o arquivo em base64 (isBase64Encoded:
+// true) — o frontend transforma isso num Blob e dispara o download.
+exports.handler = comTratamentoDeErro(async function (event) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   if (event.httpMethod !== 'GET') return json(405, { erro: 'Método não permitido.' });
 
-  const auth = await requireAuth(event, { adminOnly: true });
+  const auth = await requireAuth(event, { gerenciaOnly: true });
   if (!auth.ok) return json(auth.statusCode, { erro: auth.message });
 
   const { inicio, fim } = event.queryStringParameters || {};
@@ -112,4 +112,4 @@ exports.handler = async function (event) {
     body: Buffer.from(buffer).toString('base64'),
     isBase64Encoded: true,
   };
-};
+});

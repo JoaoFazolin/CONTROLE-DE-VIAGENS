@@ -1,16 +1,20 @@
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin');
-const { requireAuth } = require('../lib/auth');
-const { json, noContentPreflight, safeJsonParse } = require('../lib/http');
+const { requireAuth, podeGerenciar } = require('../lib/auth');
+const { json, noContentPreflight, safeJsonParse, comTratamentoDeErro } = require('../lib/http');
+
+const TAMANHO_PAGINA = 50;
 
 // /api/viagens
 // GET  ?data=YYYY-MM-DD           -> lista as viagens daquele dia
-// GET  ?inicio=...&fim=...        -> lista as viagens de um período (relatório)
+// GET  ?inicio=...&fim=...        -> lista as viagens de um período (histórico/relatório),
+//      aceita também caminhao_id, motorista_id, destino_id (filtros opcionais)
+//      e offset (paginação, 50 por página — devolve tem_mais: true/false)
 // POST { ... }                    -> cria uma viagem (motorista lança a própria,
-//                                     admin pode lançar por qualquer motorista)
-// PUT  { id, ... }                -> corrige um registro (admin)
+//                                     admin/operador_avancado podem lançar por qualquer motorista)
+// PUT  { id, ... }                -> corrige um registro, incluindo a Ordem manualmente (admin)
 // DELETE ?id=...                  -> remove um registro (admin) — uso raro,
 //                                     preferir corrigir com PUT
-exports.handler = async function (event) {
+exports.handler = comTratamentoDeErro(async function (event) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   const supabase = getSupabaseAdmin();
 
@@ -18,7 +22,15 @@ exports.handler = async function (event) {
   if (!auth.ok) return json(auth.statusCode, { erro: auth.message });
 
   if (event.httpMethod === 'GET') {
-    const { data: dataParam, inicio, fim } = event.queryStringParameters || {};
+    const {
+      data: dataParam,
+      inicio,
+      fim,
+      caminhao_id: caminhaoIdFiltro,
+      motorista_id: motoristaIdFiltro,
+      destino_id: destinoIdFiltro,
+      offset,
+    } = event.queryStringParameters || {};
 
     let query = supabase
       .from('viagens')
@@ -28,7 +40,8 @@ exports.handler = async function (event) {
          escavadeira:escavadeiras(id, codigo),
          local_carga:locais_carga(id, nome),
          destino:destinos(id, codigo, descricao),
-         motorista:profiles!viagens_motorista_id_fkey(id, nome)`
+         motorista:profiles!viagens_motorista_id_fkey(id, nome)`,
+        { count: 'exact' }
       )
       .order('data', { ascending: false })
       .order('ordem', { ascending: true });
@@ -41,14 +54,23 @@ exports.handler = async function (event) {
       return json(400, { erro: 'Informe "data" ou "inicio" e "fim".' });
     }
 
-    // Motorista comum só vê as próprias viagens; admin vê tudo.
-    if (auth.user.role !== 'admin') {
+    // Motorista comum só vê as próprias viagens; quem gerencia vê tudo.
+    if (!podeGerenciar(auth.user)) {
       query = query.eq('motorista_id', auth.user.id);
     }
 
-    const { data, error } = await query;
+    if (caminhaoIdFiltro) query = query.eq('caminhao_id', caminhaoIdFiltro);
+    if (motoristaIdFiltro) query = query.eq('motorista_id', motoristaIdFiltro);
+    if (destinoIdFiltro) query = query.eq('destino_id', destinoIdFiltro);
+
+    const inicioOffset = Number(offset) || 0;
+    query = query.range(inicioOffset, inicioOffset + TAMANHO_PAGINA - 1);
+
+    const { data, error, count } = await query;
     if (error) return json(500, { erro: 'Erro ao buscar viagens.', detalhe: error.message });
-    return json(200, { itens: data });
+
+    const temMais = count !== null && inicioOffset + TAMANHO_PAGINA < count;
+    return json(200, { itens: data, total: count, tem_mais: temMais });
   }
 
   if (event.httpMethod === 'POST') {
@@ -74,8 +96,9 @@ exports.handler = async function (event) {
       });
     }
 
-    // Motorista comum só pode lançar viagem em nome dele mesmo.
-    if (auth.user.role !== 'admin' && motorista_id !== auth.user.id) {
+    // Motorista comum só pode lançar viagem em nome dele mesmo; quem
+    // gerencia (admin/operador_avancado) pode lançar por qualquer motorista.
+    if (!podeGerenciar(auth.user) && motorista_id !== auth.user.id) {
       return json(403, { erro: 'Você só pode lançar viagens em seu próprio nome.' });
     }
 
@@ -112,14 +135,24 @@ exports.handler = async function (event) {
       'total_viagens',
       'diesel_litros',
       'motorista_id',
+      'ordem', // correção manual da sequência do dia, se algum dia ficar errada
     ];
     const payload = {};
     for (const campo of campos) {
       if (body[campo] !== undefined) payload[campo] = body[campo];
     }
+    if (Object.keys(payload).length === 0) {
+      return json(400, { erro: 'Nada para atualizar.' });
+    }
 
     const { data, error } = await supabase.from('viagens').update(payload).eq('id', id).select().single();
-    if (error) return json(500, { erro: 'Erro ao atualizar viagem.', detalhe: error.message });
+    if (error) {
+      // unique(data, ordem): já existe outra viagem com essa Ordem nesse dia.
+      if (error.code === '23505') {
+        return json(409, { erro: 'Já existe outra viagem com essa Ordem nesse dia. Escolha um número diferente.' });
+      }
+      return json(500, { erro: 'Erro ao atualizar viagem.', detalhe: error.message });
+    }
     return json(200, { item: data });
   }
 
@@ -135,4 +168,4 @@ exports.handler = async function (event) {
   }
 
   return json(405, { erro: 'Método não permitido.' });
-};
+});

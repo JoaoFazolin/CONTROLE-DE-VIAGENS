@@ -1,6 +1,11 @@
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin');
 const { requireAuth } = require('../lib/auth');
-const { json, noContentPreflight, safeJsonParse } = require('../lib/http');
+const { json, noContentPreflight, safeJsonParse, comTratamentoDeErro } = require('../lib/http');
+
+const PAPEIS_VALIDOS = ['admin', 'operador_avancado', 'motorista'];
+function normalizarPapel(role) {
+  return PAPEIS_VALIDOS.includes(role) ? role : 'motorista';
+}
 
 // /api/motoristas
 // GET: qualquer usuário autenticado (precisa da lista pra montar o formulário
@@ -9,7 +14,7 @@ const { json, noContentPreflight, safeJsonParse } = require('../lib/http');
 //       perfil (profiles) na mesma chamada.
 // PUT: admin edita nome/papel/ativo (não mexe em senha aqui).
 // DELETE: admin desativa (não apaga — histórico de viagens referencia o id).
-exports.handler = async function (event) {
+exports.handler = comTratamentoDeErro(async function (event) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   const supabase = getSupabaseAdmin();
 
@@ -42,7 +47,7 @@ exports.handler = async function (event) {
     if (senha.length < 6) {
       return json(400, { erro: 'A senha precisa ter pelo menos 6 caracteres.' });
     }
-    const papel = role === 'admin' ? 'admin' : 'motorista';
+    const papel = normalizarPapel(role);
 
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
       email: String(email).trim().toLowerCase(),
@@ -75,7 +80,7 @@ exports.handler = async function (event) {
 
     const payload = {};
     if (body.nome !== undefined) payload.nome = String(body.nome).trim();
-    if (body.role !== undefined) payload.role = body.role === 'admin' ? 'admin' : 'motorista';
+    if (body.role !== undefined) payload.role = normalizarPapel(body.role);
     if (body.ativo !== undefined) payload.ativo = !!body.ativo;
 
     const { data, error } = await supabase.from('profiles').update(payload).eq('id', id).select().single();
@@ -93,4 +98,4 @@ exports.handler = async function (event) {
   }
 
   return json(405, { erro: 'Método não permitido.' });
-};
+});

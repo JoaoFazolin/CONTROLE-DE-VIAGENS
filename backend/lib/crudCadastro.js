@@ -3,6 +3,8 @@
 // principal, ativo, criado_em. Isso evita repetir a mesma lógica 4x.
 const { getSupabaseAdmin } = require('./supabaseAdmin');
 const { requireAuth } = require('./auth');
+// Escrita permitida pra admin e operador_avancado (ver lib/auth.js) —
+// mesmo padrão do sistema de combustível pros cadastros de equipamento/obra.
 const { json, noContentPreflight, safeJsonParse } = require('./http');
 
 /**
@@ -14,7 +16,18 @@ const { json, noContentPreflight, safeJsonParse } = require('./http');
  */
 async function handleCrudCadastro(event, config) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
+  try {
+    return await executarCrudCadastro(event, config);
+  } catch (erro) {
+    console.error('Erro não tratado no CRUD de cadastro:', erro);
+    return json(500, {
+      erro: 'Erro interno no servidor. Se isso persistir, confira as variáveis de ambiente SUPABASE_URL, SUPABASE_ANON_KEY e SUPABASE_SERVICE_KEY na Netlify.',
+      detalhe: erro?.message,
+    });
+  }
+}
 
+async function executarCrudCadastro(event, config) {
   const { table, campo, campoLabel, extras = [] } = config;
   const supabase = getSupabaseAdmin();
 
@@ -33,8 +46,8 @@ async function handleCrudCadastro(event, config) {
     return json(200, { itens: data });
   }
 
-  // Escrita: só admin.
-  const auth = await requireAuth(event, { adminOnly: true });
+  // Escrita: admin ou operador_avancado.
+  const auth = await requireAuth(event, { gerenciaOnly: true });
   if (!auth.ok) return json(auth.statusCode, { erro: auth.message });
 
   if (event.httpMethod === 'POST') {
@@ -67,7 +80,10 @@ async function handleCrudCadastro(event, config) {
     }
 
     const { data, error } = await supabase.from(table).update(payload).eq('id', id).select().single();
-    if (error) return json(500, { erro: 'Erro ao atualizar.', detalhe: error.message });
+    if (error) {
+      if (error.code === '23505') return json(409, { erro: `Já existe um registro com esse ${campoLabel}.` });
+      return json(500, { erro: 'Erro ao atualizar.', detalhe: error.message });
+    }
     return json(200, { item: data });
   }
 

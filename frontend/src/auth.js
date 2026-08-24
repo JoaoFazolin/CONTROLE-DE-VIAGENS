@@ -29,7 +29,7 @@ export function estaLogado() {
 }
 
 export async function entrar(email, senha) {
-  const resposta = await fetch('/api/auth/login', {
+  const resposta = await fetch('/api/auth-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, senha }),
@@ -64,7 +64,7 @@ async function renovarSessao() {
   if (!sessao?.refresh_token) return;
 
   try {
-    const resposta = await fetch('/api/auth/refresh', {
+    const resposta = await fetch('/api/auth-refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: sessao.refresh_token }),

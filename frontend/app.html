@@ -19,13 +19,18 @@
     </div>
 
     <section class="cartao">
-      <h2>Nova viagem</h2>
+      <h2 id="titulo-form">Nova viagem</h2>
       <div id="aviso-form-erro" class="aviso aviso-erro" style="display:none;"></div>
       <div id="aviso-form-sucesso" class="aviso aviso-sucesso" style="display:none;"></div>
 
       <form id="form-viagem">
         <label for="campo-data">Data</label>
         <input type="date" id="campo-data" required />
+
+        <div id="campo-ordem-wrap" style="display:none;">
+          <label for="campo-ordem">Ordem (número sequencial do dia)</label>
+          <input type="number" id="campo-ordem" min="1" inputmode="numeric" />
+        </div>
 
         <div id="campo-caminhao"></div>
         <div id="campo-escavadeira"></div>
@@ -40,6 +45,7 @@
         <input type="number" id="campo-diesel" min="0" step="0.1" inputmode="decimal" />
 
         <div class="linha-botoes">
+          <button type="button" class="btn btn-secundario" id="btn-cancelar-edicao" style="display:none;">Cancelar edição</button>
           <button type="submit" class="btn btn-primario" id="btn-salvar-viagem">Salvar viagem</button>
         </div>
       </form>
@@ -64,11 +70,30 @@
     </section>
 
     <section class="cartao">
-      <h2>Viagens de hoje</h2>
-      <div style="overflow-x:auto;">
+      <h2>Histórico de viagens</h2>
+
+      <div class="barra-filtros">
+        <div>
+          <label for="filtro-inicio">De</label>
+          <input type="date" id="filtro-inicio" />
+        </div>
+        <div>
+          <label for="filtro-fim">Até</label>
+          <input type="date" id="filtro-fim" />
+        </div>
+        <div id="filtro-caminhao"></div>
+        <div id="filtro-motorista"></div>
+        <div id="filtro-destino"></div>
+        <div style="display:flex; align-items:flex-end;">
+          <button type="button" class="btn btn-secundario" id="btn-limpar-filtros">Limpar filtros</button>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto; margin-top:12px;">
         <table>
           <thead>
             <tr>
+              <th>Data</th>
               <th>Ordem</th>
               <th>Caminhão</th>
               <th>Destino</th>
@@ -80,8 +105,23 @@
           <tbody id="tabela-viagens-corpo"></tbody>
         </table>
       </div>
+
+      <div class="linha-botoes" id="linha-carregar-mais" style="display:none;">
+        <button type="button" class="btn btn-secundario" id="btn-carregar-mais">Carregar mais</button>
+      </div>
     </section>
   </main>
+
+  <div class="modal-fundo" id="modal-confirmacao">
+    <div class="modal-caixa">
+      <h2>Confere os dados antes de salvar</h2>
+      <ul class="resumo-confirmacao" id="lista-confirmacao"></ul>
+      <div class="linha-botoes">
+        <button type="button" class="btn btn-secundario" id="btn-confirmacao-cancelar">Corrigir</button>
+        <button type="button" class="btn btn-primario" id="btn-confirmacao-ok">Confirmar e salvar</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="src/viagens.js"></script>
 </body>

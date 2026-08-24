@@ -1,0 +1,15 @@
+# Node / Netlify Functions
+node_modules/
+backend/node_modules/
+.netlify/
+.env
+.env.local
+*.log
+
+# Editor / SO
+.DS_Store
+.vscode/
+Thumbs.db
+
+# Build/preview locais
+dist/

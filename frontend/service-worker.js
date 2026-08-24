@@ -2,7 +2,7 @@
 // abrir mesmo sem internet. As chamadas de API (/api/*) NUNCA são
 // respondidas pelo cache — precisam ir sempre pro servidor (ou falhar, e aí
 // quem trata isso é a fila de pendentes no frontend, não o service worker).
-const VERSAO_CACHE = 'lrcv-shell-v1';
+const VERSAO_CACHE = 'lrcv-shell-v2';
 
 const ARQUIVOS_SHELL = [
   '/',
@@ -10,6 +10,7 @@ const ARQUIVOS_SHELL = [
   '/app.html',
   '/cadastros.html',
   '/relatorios.html',
+  '/dashboard.html',
   '/manifest.json',
   '/styles/theme.css',
   '/src/api.js',
@@ -21,6 +22,7 @@ const ARQUIVOS_SHELL = [
   '/src/viagens.js',
   '/src/cadastrosAdmin.js',
   '/src/relatorios.js',
+  '/src/dashboard.js',
   '/layout/cabecalho.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
