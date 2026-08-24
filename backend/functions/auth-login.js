@@ -34,11 +34,19 @@ exports.handler = comTratamentoDeErro(async function (event) {
   }
 
   const supabase = getSupabaseAdmin();
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('id, nome, role, ativo')
     .eq('id', data.user.id)
     .single();
+
+  if (profileError) {
+    console.error('Erro ao buscar perfil no login:', profileError);
+    return json(500, {
+      erro: 'Login autenticou, mas não foi possível buscar o perfil. Confira a variável SUPABASE_SERVICE_KEY na Netlify.',
+      detalhe: profileError.message,
+    });
+  }
 
   if (!profile || !profile.ativo) {
     return json(403, { erro: 'Usuário sem acesso liberado. Fale com o administrador.' });
