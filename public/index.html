@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Controle de Abastecimento — L.R. Campos</title>
+<meta name="theme-color" content="#1E3A8A">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- LOCK SCREEN / LOGIN -->
+<div id="lockScreen" class="lock-screen hidden">
+  <div class="lock-card">
+    <img src="/icons/logo-lr-campos.png" alt="L.R Campos" class="brand-logo lg">
+    <h1>Controle de Abastecimento</h1>
+    <p class="sub">Entre com seu e-mail e senha.</p>
+    <input type="email" id="emailInput" placeholder="E-mail" autocomplete="username">
+    <input type="password" id="passwordInput" placeholder="Senha" autocomplete="current-password">
+    <button class="btn" id="btnEntrar">Entrar</button>
+    <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
+
+<div id="offlineBanner" class="offline-banner hidden">
+  📡 Sem conexão — os lançamentos serão guardados neste aparelho e enviados quando a internet voltar.
+</div>
+
+<div id="appRoot" class="hidden">
+  <header class="app-header">
+    <div class="header-row">
+      <div class="brand">
+        <img src="/icons/logo-lr-campos.png" alt="L.R Campos" class="brand-logo">
+        <div class="brand-text">
+          <h1>Controle de Abastecimento</h1>
+          <span>LR Campos Cia &amp; Ltda</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="sync-btn hidden" id="pendingBtn"><span id="pendingCount">0</span> pendente(s) — sincronizar</button>
+        <div class="user-badge">
+          <span id="userNome"></span>
+          <span class="role-tag" id="userRole"></span>
+        </div>
+        <button class="sync-btn" id="syncBtn"><span class="sync-icon" id="syncIcon">⟳</span> Atualizar</button>
+        <button class="sync-btn" id="btnSair">Sair</button>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button data-tab="lancamento" class="active">Lançamento de Combustível</button>
+      <button data-tab="lancamento-oleo">Lançamento de Lubrificante</button>
+      <button data-tab="estoque">Estoque</button>
+      <button data-tab="equipamentos" class="gerente-only">Cadastrar Equipamentos</button>
+      <button data-tab="obras" class="gerente-only">Obras</button>
+      <button data-tab="motoristas" class="gerente-only">Motoristas</button>
+      <button data-tab="tipos-oleo" class="admin-only">Cadastrar Lubrificante</button>
+      <button data-tab="relatorio" class="gerente-only">Relatório</button>
+      <button data-tab="relatorio-estoque" class="gerente-only">Relatório de Estoque</button>
+      <button data-tab="dashboard" class="gerente-only">Dashboard</button>
+      <button data-tab="usuarios" class="admin-only">Usuários</button>
+      <button data-tab="configuracoes" class="admin-only">Configurações</button>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- LANÇAMENTO SIMPLIFICADO (só para o papel "operador") -->
+    <section id="tab-lancamento-operador" class="hidden">
+      <div class="card">
+        <h2>Novo Lançamento</h2>
+        <div class="sub">Diesel é o padrão. Toque em "Lubrificante" se for lançar lubrificante.</div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-opmode="diesel">Diesel</button>
+          <button class="mode-btn" data-opmode="oleo">Lubrificante</button>
+        </div>
+
+        <div class="row-inline">
+          <div class="field"><label>Data</label><input type="date" id="op_data"></div>
+          <div class="field"><label>Motorista</label><select id="op_operador"><option value="">Selecione o motorista...</option></select></div>
+        </div>
+        <div class="row-inline">
+          <div class="field autocomplete-wrap">
+            <label>Equipamento</label>
+            <input type="text" id="op_equipamento_busca" class="autocomplete-input" placeholder="Digite o número do equipamento..." autocomplete="off" inputmode="numeric">
+            <input type="hidden" id="op_equipamento" value="">
+            <div class="autocomplete-list hidden" id="op_equipamento_lista"></div>
+          </div>
+        </div>
+        <div class="row-inline hidden" id="op_campoTipoOleo">
+          <div class="field"><label>Tipo de Lubrificante</label><select id="op_tipoOleo"></select></div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><label id="op_labelLitros">Litros de Saída</label><input type="number" step="any" inputmode="decimal" id="op_litros" placeholder="0"></div>
+        </div>
+        <div class="row-inline" id="op_campoKmHora">
+          <div class="field"><label>Km / Hora (Horímetro)</label><input type="number" step="any" inputmode="decimal" id="op_kmhora" placeholder="0"></div>
+        </div>
+
+        <button class="btn" id="op_btnSalvar">Salvar Lançamento</button>
+        <input type="hidden" id="op_marcInicial" value="">
+      </div>
+    </section>
+
+    <!-- CONFIRMAÇÃO DE LANÇAMENTO (operador) -->
+    <div class="modal-overlay hidden" id="opConfirmOverlay">
+      <div class="modal-card">
+        <div class="modal-icon">📋</div>
+        <p class="modal-msg" style="margin-bottom:14px;">Deseja confirmar o lançamento?</p>
+        <div id="opConfirmResumo" style="text-align:left;background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:14px;line-height:1.7;"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" id="opConfirmCancelar" style="margin-top:0;">Cancelar</button>
+          <button class="btn" id="opConfirmOk" style="margin-top:0;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANÇAMENTO DE COMBUSTÍVEL -->
+    <section id="tab-lancamento">
+      <div class="card">
+        <h2 id="formTitle">Novo Lançamento de Combustível</h2>
+        <div class="sub">Registre a saída de combustível de um equipamento.</div>
+
+        <div class="row-inline">
+          <div class="field"><label>Data</label><input type="date" id="f_data"></div>
+          <div class="field"><label>Operador / Motorista</label><select id="f_operador"><option value="">Selecione o motorista...</option></select></div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><label>Obra</label><select id="f_obra"></select></div>
+          <div class="field autocomplete-wrap">
+            <label>Equipamento</label>
+            <input type="text" id="f_equipamento_busca" class="autocomplete-input" placeholder="Digite para buscar..." autocomplete="off">
+            <input type="hidden" id="f_equipamento" value="">
+            <div class="autocomplete-list hidden" id="f_equipamento_lista"></div>
+          </div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><label>Combustível</label><select id="f_tipoCombustivel"></select></div>
+          <div class="field"><label>Litros de Saída</label><input type="number" step="any" inputmode="decimal" id="f_litros" placeholder="0"></div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><label>Marcador Inicial</label><input type="number" step="any" inputmode="decimal" id="f_marcInicial" placeholder="0"></div>
+          <div class="field"><label>Marcador Final <span style="font-weight:400;color:var(--muted);">(calculado)</span></label><input type="number" step="any" id="f_marcFinal" placeholder="0" readonly></div>
+        </div>
+        <div class="sub" style="margin-top:-8px;">O Marcador Inicial já vem preenchido com o marcador final do último lançamento (qualquer equipamento). O Marcador Final é calculado sozinho: Marcador Inicial + Litros.</div>
+        <div class="row-inline">
+          <div class="field"><label>Km / Hora</label><input type="number" step="any" inputmode="decimal" id="f_kmhora" placeholder="0"></div>
+        </div>
+        <div class="row-inline">
+          <button class="btn" id="btnSalvar">Salvar Lançamento</button>
+          <button class="btn secondary hidden" id="btnCancelarEdicao" style="margin-top:0;">Cancelar edição</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Últimos Lançamentos de Combustível</h2>
+        <div class="sub">Lançamentos mais recentes, sincronizados de qualquer aparelho.</div>
+        <div id="entriesList"><div class="empty-state">Carregando...</div></div>
+      </div>
+    </section>
+
+    <!-- EQUIPAMENTOS -->
+    <section id="tab-equipamentos" class="hidden">
+      <div class="card">
+        <h2>Equipamentos</h2>
+        <div class="sub">Cadastre os equipamentos e, se quiser, o combustível padrão de cada um.</div>
+        <div class="row-inline">
+          <div class="field"><input type="text" id="novoEquipamento" placeholder="Ex: CG-25, RCA-586, KH-357..."></div>
+          <div class="field"><select id="novoEquipamentoTipo"><option value="">Combustível padrão (opcional)</option></select></div>
+          <button class="btn secondary" id="btnAddEquipamento" style="margin-top:0;">Adicionar</button>
+        </div>
+        <div id="listaEquipamentos"></div>
+      </div>
+    </section>
+
+    <!-- OBRAS -->
+    <section id="tab-obras" class="hidden">
+      <div class="card">
+        <h2>Obras</h2>
+        <div class="sub">Cadastre aqui as obras/frentes de trabalho.</div>
+        <div class="add-row">
+          <input type="text" id="novaObra" placeholder="Ex: Obra Central, Loteamento Norte...">
+          <button class="btn secondary" id="btnAddObra" style="margin-top:0;">Adicionar</button>
+        </div>
+        <div id="listaObras"></div>
+      </div>
+    </section>
+
+    <!-- MOTORISTAS -->
+    <section id="tab-motoristas" class="hidden">
+      <div class="card">
+        <h2>Motoristas</h2>
+        <div class="sub">Cadastre aqui os motoristas/operadores. Depois disso, o nome aparece pra selecionar em qualquer lançamento — inclusive na tela do Operador.</div>
+        <div class="add-row">
+          <input type="text" id="novoMotorista" placeholder="Ex: João Silva">
+          <button class="btn secondary" id="btnAddMotorista" style="margin-top:0;">Adicionar</button>
+        </div>
+        <div id="listaMotoristas"></div>
+      </div>
+    </section>
+
+    <!-- ESTOQUE (combustível + lubrificante) -->
+    <section id="tab-estoque" class="hidden">
+      <div class="card">
+        <h2>Estoque</h2>
+        <div class="sub">Selecione qual estoque quer ver e onde registrar a entrada.</div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-emode="combustivel">Combustível</button>
+          <button class="mode-btn" data-emode="oleo">Lubrificante</button>
+        </div>
+      </div>
+
+      <div id="estoqueViewCombustivel">
+        <div class="card">
+          <h2>Estoque de Combustível</h2>
+          <div class="sub">Saldo atual do comboio: entradas registradas menos o que já foi lançado nos equipamentos.</div>
+          <div id="estoqueCards"></div>
+        </div>
+
+        <div class="card admin-only">
+          <h2>Registrar Entrada de Combustível (chegada do comboio)</h2>
+          <div class="sub">Ex: chegou 3.500L de Diesel no dia 15/07/2026.</div>
+          <div class="row-inline">
+            <div class="field"><label>Data</label><input type="date" id="e_data"></div>
+            <div class="field"><label>Combustível</label><select id="e_tipo"></select></div>
+          </div>
+          <div class="row-inline">
+            <div class="field"><label>Litros Recebidos</label><input type="number" step="any" inputmode="decimal" id="e_litros" placeholder="0"></div>
+            <div class="field"><label>Fornecedor (opcional)</label><input type="text" id="e_fornecedor" placeholder="Nome do fornecedor"></div>
+          </div>
+          <div class="row-inline">
+            <div class="field"><label>Nota Fiscal (opcional)</label><input type="text" id="e_notaFiscal" placeholder="Número da NF"></div>
+            <div class="field"><label>Observação (opcional)</label><input type="text" id="e_obs" placeholder="Observações"></div>
+          </div>
+          <button class="btn" id="btnSalvarEntrada">Registrar Entrada</button>
+          <div id="pendingEntradaCombustivel" style="margin-top:14px;"></div>
+        </div>
+      </div>
+
+      <div id="estoqueViewOleo" class="hidden">
+        <div class="card">
+          <h2>Estoque de Lubrificante</h2>
+          <div class="sub">Saldo atual: entradas registradas menos o que já foi lançado nos equipamentos.</div>
+          <div id="estoqueOleoCards"></div>
+        </div>
+
+        <div class="card admin-only">
+          <h2>Registrar Entrada de Lubrificante</h2>
+          <div class="sub">Ex: chegou 40L de Óleo Hidráulico no dia 15/07/2026.</div>
+          <div class="row-inline">
+            <div class="field"><label>Data</label><input type="date" id="eo_data"></div>
+            <div class="field"><label>Tipo de Lubrificante</label><select id="eo_tipo"></select></div>
+          </div>
+          <div class="row-inline">
+            <div class="field"><label>Quantidade Recebida (L)</label><input type="number" step="any" inputmode="decimal" id="eo_litros" placeholder="0"></div>
+            <div class="field"><label>Fornecedor (opcional)</label><input type="text" id="eo_fornecedor" placeholder="Nome do fornecedor"></div>
+          </div>
+          <div class="row-inline">
+            <div class="field"><label>Nota Fiscal (opcional)</label><input type="text" id="eo_notaFiscal" placeholder="Número da NF"></div>
+            <div class="field"><label>Observação (opcional)</label><input type="text" id="eo_obs" placeholder="Observações"></div>
+          </div>
+          <button class="btn" id="btnSalvarEntradaOleo">Registrar Entrada</button>
+          <div id="pendingEntradaOleo" style="margin-top:14px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIPOS DE ÓLEO (admin) -->
+    <section id="tab-tipos-oleo" class="hidden">
+      <div class="card">
+        <h2>Cadastrar Lubrificante</h2>
+        <div class="sub">Cadastre aqui os tipos de lubrificante do comboio (ex: Óleo Motor 15W40, Óleo Hidráulico...) e o estoque mínimo de cada um para o alerta na aba Estoque.</div>
+        <div class="row-inline">
+          <div class="field"><input type="text" id="novoTipoOleo" placeholder="Ex: Óleo Motor 15W40"></div>
+          <div class="field"><input type="number" step="any" inputmode="decimal" id="novoTipoOleoMinimo" placeholder="Estoque mínimo (L), opcional"></div>
+          <button class="btn secondary" id="btnAddTipoOleo" style="margin-top:0;">Adicionar</button>
+        </div>
+        <div id="listaTiposOleo"></div>
+      </div>
+    </section>
+
+    <!-- LANÇAMENTO DE ÓLEO -->
+    <section id="tab-lancamento-oleo" class="hidden">
+      <div class="card">
+        <h2 id="formTitleOleo">Novo Lançamento de Lubrificante</h2>
+        <div class="sub">Registre o uso de lubrificante em um equipamento. Sem marcador inicial/final — só a quantidade usada.</div>
+
+        <div class="row-inline">
+          <div class="field"><label>Data</label><input type="date" id="fo_data"></div>
+          <div class="field"><label>Operador / Motorista</label><select id="fo_operador"><option value="">Selecione o motorista...</option></select></div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><label>Obra</label><select id="fo_obra"></select></div>
+          <div class="field autocomplete-wrap">
+            <label>Equipamento</label>
+            <input type="text" id="fo_equipamento_busca" class="autocomplete-input" placeholder="Digite para buscar..." autocomplete="off">
+            <input type="hidden" id="fo_equipamento" value="">
+            <div class="autocomplete-list hidden" id="fo_equipamento_lista"></div>
+          </div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><label>Tipo de Lubrificante</label><select id="fo_tipoOleo"></select></div>
+          <div class="field"><label>Quantidade (L)</label><input type="number" step="any" inputmode="decimal" id="fo_litros" placeholder="0"></div>
+        </div>
+        <div class="row-inline">
+          <button class="btn" id="btnSalvarOleo">Salvar Lançamento</button>
+          <button class="btn secondary hidden" id="btnCancelarEdicaoOleo" style="margin-top:0;">Cancelar edição</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Últimos Lançamentos de Lubrificante</h2>
+        <div class="sub">Lançamentos mais recentes, sincronizados de qualquer aparelho.</div>
+        <div id="entriesOleoList"><div class="empty-state">Carregando...</div></div>
+      </div>
+    </section>
+
+    <!-- RELATORIO -->
+    <section id="tab-relatorio" class="hidden">
+      <div class="card">
+        <h2>Relatório</h2>
+        <div class="sub">Selecione qual relatório de lançamento você quer ver.</div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-rmode="combustivel">Combustível</button>
+          <button class="mode-btn" data-rmode="oleo">Lubrificante</button>
+        </div>
+      </div>
+
+      <div id="relatorioViewCombustivel">
+        <div class="card">
+          <h2>Relatório de Lançamentos de Combustível</h2>
+          <div class="sub">Filtre por equipamento e por data, e baixe em Excel.</div>
+
+          <div class="mode-toggle">
+            <button class="mode-btn active" data-mode="periodo">Período</button>
+            <button class="mode-btn" data-mode="dia">Dia específico</button>
+          </div>
+
+          <div class="filter-bar" id="periodoFields">
+            <div class="field"><label>De</label><input type="date" id="r_de"></div>
+            <div class="field"><label>Até</label><input type="date" id="r_ate"></div>
+          </div>
+          <div class="filter-bar hidden" id="diaFields">
+            <div class="field"><label>Dia</label><input type="date" id="r_dia"></div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="field"><label>Obra</label><select id="r_obra"><option value="">Todas</option></select></div>
+            <div class="field"><label>Equipamento</label><select id="r_equipamento"><option value="">Todos</option></select></div>
+            <div class="field"><label>Combustível</label><select id="r_tipoCombustivel"><option value="">Todos</option></select></div>
+            <div class="field"><label>Operador</label><input type="text" id="r_operador" placeholder="Buscar nome..."></div>
+          </div>
+
+          <div class="row-inline" style="margin-bottom:16px;">
+            <button class="btn secondary" id="btnFiltrar" style="margin-top:0;">Filtrar</button>
+            <button class="btn secondary" id="btnExportar" style="margin-top:0;">⬇ Baixar Excel (.xlsx)</button>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat"><div class="lbl">Lançamentos</div><div class="val" id="statCount">0</div></div>
+            <div class="stat"><div class="lbl">Litros Total</div><div class="val" id="statLitros">0</div></div>
+          </div>
+
+          <div id="reportTableWrap"></div>
+        </div>
+      </div>
+
+      <div id="relatorioViewOleo" class="hidden">
+        <div class="card">
+          <h2>Relatório de Lançamentos de Lubrificante</h2>
+          <div class="sub">Filtre por equipamento e por data, e baixe em Excel.</div>
+
+          <div class="mode-toggle">
+            <button class="mode-btn active" data-modeoleo="periodo">Período</button>
+            <button class="mode-btn" data-modeoleo="dia">Dia específico</button>
+          </div>
+
+          <div class="filter-bar" id="periodoFieldsOleo">
+            <div class="field"><label>De</label><input type="date" id="ro_de"></div>
+            <div class="field"><label>Até</label><input type="date" id="ro_ate"></div>
+          </div>
+          <div class="filter-bar hidden" id="diaFieldsOleo">
+            <div class="field"><label>Dia</label><input type="date" id="ro_dia"></div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="field"><label>Obra</label><select id="ro_obra"><option value="">Todas</option></select></div>
+            <div class="field"><label>Equipamento</label><select id="ro_equipamento"><option value="">Todos</option></select></div>
+            <div class="field"><label>Tipo de Lubrificante</label><select id="ro_tipo"><option value="">Todos</option></select></div>
+            <div class="field"><label>Operador</label><input type="text" id="ro_operador" placeholder="Buscar nome..."></div>
+          </div>
+
+          <div class="row-inline" style="margin-bottom:16px;">
+            <button class="btn secondary" id="btnFiltrarOleo" style="margin-top:0;">Filtrar</button>
+            <button class="btn secondary" id="btnExportarLancamentosOleo" style="margin-top:0;">⬇ Baixar Excel (.xlsx)</button>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat"><div class="lbl">Lançamentos</div><div class="val" id="statCountOleo">0</div></div>
+            <div class="stat"><div class="lbl">Litros Total</div><div class="val" id="statLitrosOleo">0</div></div>
+          </div>
+
+          <div id="reportTableWrapOleo"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RELATORIO DE ESTOQUE (entradas) -->
+    <section id="tab-relatorio-estoque" class="hidden">
+      <div class="card">
+        <h2>Relatório de Estoque</h2>
+        <div class="sub">Selecione qual relatório de entrada você quer ver.</div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-remode="combustivel">Combustível</button>
+          <button class="mode-btn" data-remode="oleo">Lubrificante</button>
+        </div>
+      </div>
+
+      <div id="relatorioEstoqueViewCombustivel">
+        <div class="card">
+          <h2>Relatório de Entradas de Combustível</h2>
+          <div class="sub">Filtre por período e/ou combustível, e baixe em Excel.</div>
+          <div class="filter-bar">
+            <div class="field"><label>De</label><input type="date" id="en_de"></div>
+            <div class="field"><label>Até</label><input type="date" id="en_ate"></div>
+            <div class="field"><label>Combustível</label><select id="en_tipo"><option value="">Todos</option></select></div>
+          </div>
+          <div class="row-inline" style="margin-bottom:16px;">
+            <button class="btn secondary" id="btnFiltrarEntradas" style="margin-top:0;">Filtrar</button>
+            <button class="btn secondary" id="btnExportarEntradas" style="margin-top:0;">⬇ Baixar Excel (.xlsx)</button>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><div class="lbl">Entradas</div><div class="val" id="statEntradasCount">0</div></div>
+            <div class="stat"><div class="lbl">Litros Total</div><div class="val" id="statEntradasLitros">0</div></div>
+          </div>
+          <div id="reportEntradasTableWrap"></div>
+        </div>
+      </div>
+
+      <div id="relatorioEstoqueViewOleo" class="hidden">
+        <div class="card">
+          <h2>Relatório de Entradas de Lubrificante</h2>
+          <div class="sub">Filtre por período e/ou tipo de lubrificante, e baixe em Excel.</div>
+          <div class="filter-bar">
+            <div class="field"><label>De</label><input type="date" id="eno_de"></div>
+            <div class="field"><label>Até</label><input type="date" id="eno_ate"></div>
+            <div class="field"><label>Tipo de Lubrificante</label><select id="eno_tipo"><option value="">Todos</option></select></div>
+          </div>
+          <div class="row-inline" style="margin-bottom:16px;">
+            <button class="btn secondary" id="btnFiltrarEntradasOleo" style="margin-top:0;">Filtrar</button>
+            <button class="btn secondary" id="btnExportarEntradasOleo" style="margin-top:0;">⬇ Baixar Excel (.xlsx)</button>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><div class="lbl">Entradas</div><div class="val" id="statEntradasOleoCount">0</div></div>
+            <div class="stat"><div class="lbl">Litros Total</div><div class="val" id="statEntradasOleoLitros">0</div></div>
+          </div>
+          <div id="reportEntradasOleoTableWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="hidden">
+      <div class="card">
+        <h2>Dashboard</h2>
+        <div class="sub">Consumo de combustível por equipamento — dia ou mês.</div>
+
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-dmode="dia">Dia</button>
+          <button class="mode-btn" data-dmode="mes">Mês</button>
+        </div>
+        <div class="filter-bar">
+          <div class="field"><label id="dashDateLabel">Dia de referência</label><input type="date" id="d_data"></div>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat"><div class="lbl" id="dashTotalLabel">Litros no dia</div><div class="val" id="dashTotalLitros">0</div></div>
+          <div class="stat"><div class="lbl">Lançamentos</div><div class="val" id="dashTotalLanc">0</div></div>
+          <div class="stat"><div class="lbl">Equipamentos ativos</div><div class="val" id="dashTotalEquip">0</div></div>
+        </div>
+
+        <h3 class="section-title">Litros por equipamento</h3>
+        <div id="dashBars"></div>
+
+        <h3 class="section-title">Litros por combustível</h3>
+        <div id="dashBarsTipo"></div>
+      </div>
+    </section>
+
+    <!-- USUARIOS -->
+    <section id="tab-usuarios" class="hidden">
+      <div class="card">
+        <h2>Usuários</h2>
+        <div class="sub">Cadastre operadores de campo e outros administradores.</div>
+        <div class="row-inline">
+          <div class="field"><input type="text" id="u_nome" placeholder="Nome completo"></div>
+          <div class="field"><input type="email" id="u_email" placeholder="E-mail"></div>
+        </div>
+        <div class="row-inline">
+          <div class="field"><input type="password" id="u_senha" placeholder="Senha (mín. 6 caracteres)"></div>
+          <div class="field">
+            <select id="u_role">
+              <option value="operador">Operador (só lança e edita o que ele mesmo registrou)</option>
+              <option value="operador_avancado">Operador Avançado (todos os módulos, exceto Usuários)</option>
+              <option value="admin">Administrador (acesso completo)</option>
+            </select>
+          </div>
+          <button class="btn secondary" id="btnAddUsuario" style="margin-top:0;">Criar usuário</button>
+        </div>
+        <div id="listaUsuarios"></div>
+      </div>
+    </section>
+
+    <!-- CONFIGURAÇÕES (admin) -->
+    <section id="tab-configuracoes" class="hidden">
+      <div class="card">
+        <h2>Configurações</h2>
+        <div class="sub">Ajustes gerais do sistema.</div>
+        <div class="row-inline">
+          <div class="field">
+            <label>Obra Padrão (usada automaticamente no lançamento do Operador)</label>
+            <select id="cfg_obraPadrao"><option value="">Selecione a obra...</option></select>
+          </div>
+        </div>
+        <div class="sub" style="margin-top:-8px;">O Operador não escolhe mais a obra na tela dele — todo lançamento feito por ele usa automaticamente a obra selecionada aqui.</div>
+        <button class="btn" id="btnSalvarConfiguracoes">Salvar</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BARRA FIXA DE BAIXO (só aparece no celular/tablet) -->
+  <nav class="bottom-nav">
+    <button data-tab="lancamento" class="bn-btn active">
+      <span class="bn-icon">⛽</span><span class="bn-label">Combustível</span>
+    </button>
+    <button data-tab="lancamento-oleo" class="bn-btn">
+      <span class="bn-icon">🛢</span><span class="bn-label">Lubrificante</span>
+    </button>
+    <button data-tab="estoque" class="bn-btn">
+      <span class="bn-icon">📦</span><span class="bn-label">Estoque</span>
+    </button>
+    <button id="btnMais" class="bn-btn hidden">
+      <span class="bn-icon">☰</span><span class="bn-label">Mais</span>
+    </button>
+  </nav>
+</div>
+
+<!-- FOLHA "MAIS" (mobile) — abas de cadastro/gestão, só pra quem gerencia -->
+<div class="modal-overlay hidden" id="maisSheetOverlay">
+  <div class="sheet-card">
+    <h3 class="sheet-title">Mais opções</h3>
+    <button data-tab="equipamentos" class="sheet-item gerente-only">🛠 Cadastrar Equipamentos</button>
+    <button data-tab="obras" class="sheet-item gerente-only">🏗 Obras</button>
+    <button data-tab="motoristas" class="sheet-item gerente-only">🧑‍✈️ Motoristas</button>
+    <button data-tab="tipos-oleo" class="sheet-item admin-only">🛢 Cadastrar Lubrificante</button>
+    <button data-tab="relatorio" class="sheet-item gerente-only">📊 Relatório</button>
+    <button data-tab="relatorio-estoque" class="sheet-item gerente-only">📦 Relatório de Estoque</button>
+    <button data-tab="dashboard" class="sheet-item gerente-only">📈 Dashboard</button>
+    <button data-tab="usuarios" class="sheet-item admin-only">👤 Usuários</button>
+    <button data-tab="configuracoes" class="sheet-item admin-only">⚙️ Configurações</button>
+    <button class="btn secondary" id="fecharSheetMais" style="margin-top:10px;">Fechar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- MODAL DE CONFIRMAÇÃO (substitui o confirm() nativo do navegador) -->
+<div class="modal-overlay hidden" id="confirmOverlay">
+  <div class="modal-card">
+    <div class="modal-icon">❓</div>
+    <p class="modal-msg" id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="confirmCancelBtn" style="margin-top:0;">Cancelar</button>
+      <button class="btn danger" id="confirmOkBtn" style="margin-top:0;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

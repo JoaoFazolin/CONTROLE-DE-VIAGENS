@@ -1,0 +1,10 @@
+{
+  "name": "controle-combustivel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de controle de abastecimento de combustivel - L.R Campos Cia & Ltda",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "exceljs": "^4.4.0"
+  }
+}
