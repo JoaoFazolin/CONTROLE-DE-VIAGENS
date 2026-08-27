@@ -1,10 +1,25 @@
-[build]
-  publish = "public"
-  functions = "netlify/functions"
+# Configuração do Netlify — precisa ficar na raiz do repositório (exigência
+# da própria Netlify), mesmo com o código das functions morando em backend/.
+# Mesmo padrão do sistema de combustível já validado (CONTROLE_OBRA).
 
-# O frontend chama /api/... — este redirect encaminha para as Netlify Functions.
-# Sem este bloco, todas as chamadas /api/* retornam 404 e os seletores ficam vazios.
+[build]
+  base = "."
+  publish = "frontend"
+  functions = "backend/functions"
+  command = "cd backend && npm install"
+
+[functions]
+  node_bundler = "esbuild"
+
+# O frontend chama /api/... — este redirect coringa encaminha tudo para as
+# Netlify Functions (nome da function = último pedaço da URL). Sem este
+# bloco, toda chamada /api/* cai em 404 e os seletores ficam vazios.
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+# Observação: este app NÃO é uma SPA de página única — cada tela é um .html
+# próprio (index.html, app.html, cadastros.html, relatorios.html), então não
+# precisa (nem deve) ter redirect coringa "/* -> /index.html". A Netlify já
+# serve os arquivos estáticos de frontend/ normalmente.
