@@ -3,7 +3,6 @@ import { montarCabecalho } from '../layout/cabecalho.js';
 import { chamarApi, ErroApi } from './api.js';
 import { atualizarCadastros, obterCacheLocal } from './cadastrosCache.js';
 import { criarCombobox } from './combobox.js';
-import { criarBotoesDestino } from './botoesDestino.js';
 import { salvarViagem, novoClientUuid, aoMudarFila, iniciarSincronizacaoAutomatica, tentarSincronizarFila } from './fila.js';
 
 if (!exigirLogin()) throw new Error('redirecionando para login');
@@ -74,11 +73,11 @@ function montarCombos(cache) {
     rotulo: 'Local de carga/corte (opcional)',
     opcoes: opcoesDe(cache.locais_carga, (l) => l.nome),
   });
-  comboDestino = criarBotoesDestino({
+  comboDestino = criarCombobox({
     container: document.getElementById('campo-destino'),
     rotulo: 'Destino',
     obrigatorio: true,
-    destinos: cache.destinos || [],
+    opcoes: opcoesDe(cache.destinos, (d) => (d.descricao ? `${d.codigo} — ${d.descricao}` : d.codigo)),
   });
   comboMotorista = criarCombobox({
     container: document.getElementById('campo-motorista'),
@@ -261,7 +260,7 @@ form.addEventListener('submit', async (ev) => {
   }
 
   const textoCaminhao = document.querySelector('#campo-caminhao .cb-input').value;
-  const textoDestino = comboDestino.obterTexto();
+  const textoDestino = document.querySelector('#campo-destino .cb-input').value;
   const textoMotorista = document.querySelector('#campo-motorista .cb-input').value;
 
   // Capturado aqui, no instante do clique em "Salvar" — é esse valor (não

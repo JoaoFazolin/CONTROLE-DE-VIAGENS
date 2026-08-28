@@ -22,7 +22,9 @@ lr-controle-viagens/
 ├── supabase/
 │   ├── schema.sql                                  # schema base (rodar 1x)
 │   ├── migration_001_operador_avancado_e_edicao.sql # rodar depois do schema.sql
-│   └── migration_002_vinculo_motorista_caminhao.sql # rodar depois da migration_001
+│   ├── migration_002_vinculo_motorista_caminhao.sql # rodar depois da migration_001
+│   ├── migration_003_volume_caminhao.sql             # rodar depois da migration_002
+│   └── migration_004_motorista_sem_login.sql         # rodar depois da migration_003
 ├── test-api.js       # diagnóstico rápido do backend (node test-api.js)
 └── netlify.toml       # config de build/rotas da Netlify (precisa ficar na raiz)
 ```
@@ -46,6 +48,7 @@ lr-controle-viagens/
    2. `supabase/migration_001_operador_avancado_e_edicao.sql`
    3. `supabase/migration_002_vinculo_motorista_caminhao.sql`
    4. `supabase/migration_003_volume_caminhao.sql`
+   5. `supabase/migration_004_motorista_sem_login.sql`
 3. Em **Project Settings → API**, anote as três coisas:
    - **Project URL**
    - **anon public key**
@@ -63,7 +66,7 @@ O cadastro de motoristas pela tela **Cadastros** só funciona para quem já é a
    from auth.users
    where email = 'seuemail@exemplo.com';
    ```
-3. A partir daí, esse admin consegue cadastrar todos os motoristas, caminhões, escavadeiras, locais e destinos direto pela tela do sistema.
+3. A partir daí, esse admin consegue cadastrar todos os motoristas, usuários (Operador Avançado/Admin), caminhões, escavadeiras, locais e destinos direto pela tela do sistema.
 
 ### 3. Cadastrar os destinos (AT.O, BF.O, AT.L, etc.)
 
@@ -105,13 +108,18 @@ No celular/tablet, abra o site no navegador (Chrome no Android é o mais confiá
 
 ## Papéis de usuário
 
-Na prática, quem loga e lança na obra é o **Operador Avançado** — o operador de cada escavadeira (ex: EH 347, EH 349) — não o motorista do caminhão (o motorista não abre o app). Por isso o cargo "Motorista" existe no cadastro só como **nome pra aparecer na lista** de quem dirigiu cada carga; ele não costuma ter login de verdade.
+Na prática, quem loga e lança na obra é o **Operador Avançado** — o operador de cada escavadeira (ex: EH 347, EH 349) — não o motorista do caminhão (o motorista não abre o app). Por isso, desde a `migration_004_motorista_sem_login.sql`, o cargo "Motorista" nem tem login: é só um **nome cadastrado** pra aparecer na lista de quem dirigiu cada carga, sem e-mail/senha nenhum.
+
+Por causa disso, o cadastro fica em **duas telas separadas** dentro de **Cadastros**:
+
+- **Cadastros → Motoristas**: só o **Nome**. Não pede e-mail/senha porque motorista não loga — é só um registro pra poder vincular a um caminhão e escolher como "quem dirigiu" na hora de lançar a viagem.
+- **Cadastros → Usuários (Operador / Administrador)**: pede **Nome, E-mail e Senha** — cria o login de verdade no Supabase Auth, pra quem realmente entra no app.
 
 - **Operador Avançado**: só a tela **Viagens** fica ativa (não vê Cadastros, Relatórios nem Dashboard). Ele escolhe **livremente** qual Caminhão e qual Motorista em cada lançamento — não é ele quem dirige, então não trava no próprio nome. Isso cobre o caso de um motorista faltar: nesse dia o operador simplesmente escolhe outro nome no campo Motorista pra aquele caminhão; no dia seguinte, quando o motorista titular volta, é só escolher o nome dele de novo (nada fica "preso" permanentemente — é uma escolha a cada lançamento, não uma troca de cadastro). O relatório Excel sempre mostra os dois: quem **operou** (lançou) e quem **dirigiu** (motorista daquela viagem específica). Cada operador só vê/edita o que **ele mesmo** lançou (não o que outro operador lançou, mesmo que pro mesmo motorista).
-- **Motorista**: cargo raro de logar de verdade (normalmente é só um nome no cadastro, escolhido pelo operador a cada viagem). Se algum dia um motorista tiver login próprio, aí sim ele só lança/vê as próprias viagens (fica travado no próprio nome, como no vínculo motorista→caminhão abaixo).
-- **Administrador**: acesso total — o único que vê Cadastros, Relatórios e Dashboard, gerencia Motoristas/Operadores (incluindo promover alguém a Operador Avançado), lança viagem por qualquer motorista, e edita/exclui qualquer viagem já lançada (inclusive corrigir manualmente o número da Ordem, se algum dia ficar errado).
+- **Motorista**: não loga — é só um nome no cadastro, escolhido pelo operador a cada viagem.
+- **Administrador**: acesso total — o único que vê Cadastros, Relatórios e Dashboard, gerencia Motoristas (Cadastros → Motoristas) e Usuários/Operadores (Cadastros → Usuários, incluindo promover alguém a Operador Avançado ao editar o Papel ali), lança viagem por qualquer motorista, e edita/exclui qualquer viagem já lançada (inclusive corrigir manualmente o número da Ordem, se algum dia ficar errado).
 
-Depois de rodar a `migration_001_operador_avancado_e_edicao.sql` (ver Passo 1), promova alguém a Operador Avançado direto pela tela **Cadastros → Motoristas → Editar**, ou pelo SQL Editor:
+Depois de rodar a `migration_001_operador_avancado_e_edicao.sql` (ver Passo 1) e a `migration_004_motorista_sem_login.sql`, promova alguém a Operador Avançado direto pela tela **Cadastros → Usuários → Editar** (mudando o Papel), ou pelo SQL Editor:
 ```sql
 update public.profiles set role = 'operador_avancado'
 where id = (select id from auth.users where email = 'email@exemplo.com');

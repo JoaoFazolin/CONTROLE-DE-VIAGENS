@@ -125,7 +125,9 @@ let motoristasParaSelect = [];
 async function carregarMotoristasParaSelect() {
   try {
     const resultado = await chamarApi('/api/motoristas');
-    motoristasParaSelect = resultado.itens;
+    // Só role "motorista" — o vínculo caminhão↔motorista é sobre quem
+    // dirige, não sobre quem loga no app (Operador/Admin não entram aqui).
+    motoristasParaSelect = resultado.itens.filter((m) => m.role === 'motorista');
     const opcoesSelect = [{ valor: '', rotulo: 'Nenhum' }, ...motoristasParaSelect.map((m) => ({ valor: m.id, rotulo: m.nome }))];
     const selectFormulario = document.querySelector('#form-caminhao select[name="motorista_id"]');
     if (selectFormulario) {
@@ -335,36 +337,26 @@ document.getElementById('form-destino').addEventListener('submit', async (ev) =>
 });
 carregarDestinos();
 
-// --- Motoristas (admin only) ------------------------------------------------
-const RÓTULO_PAPEL = { admin: 'Administrador', operador_avancado: 'Operador Avançado', motorista: 'Motorista' };
-
+// --- Motoristas (admin only) — só nome, sem login ---------------------------
+// Motorista não abre o app (quem lança é o Operador Avançado, escolhendo
+// livremente quem dirigiu) — então não pede e-mail/senha aqui, só o nome,
+// pra poder vincular a um caminhão e aparecer na lista de "quem dirigiu".
+// Usuário com login de verdade (Operador Avançado/Admin) é cadastrado em
+// "Usuários", logo abaixo.
 async function carregarMotoristas() {
   if (sessao.usuario.role !== 'admin') return;
   try {
     const resultado = await chamarApi('/api/motoristas');
     const corpo = document.getElementById('lista-motoristas');
     corpo.innerHTML = '';
-    for (const item of resultado.itens) {
+    for (const item of resultado.itens.filter((m) => m.role === 'motorista')) {
       corpo.appendChild(
         linhaEditavel({
           id: item.id,
-          textoExibicao: `${item.nome} (${RÓTULO_PAPEL[item.role] || item.role})`,
-          campos: [
-            { nome: 'nome', rotulo: 'Nome', valor: item.nome },
-            {
-              nome: 'role',
-              rotulo: 'Papel',
-              tipo: 'select',
-              valor: item.role,
-              opcoes: [
-                { valor: 'motorista', rotulo: 'Motorista' },
-                { valor: 'operador_avancado', rotulo: 'Operador Avançado' },
-                { valor: 'admin', rotulo: 'Administrador' },
-              ],
-            },
-          ],
+          textoExibicao: item.nome,
+          campos: [{ nome: 'nome', rotulo: 'Nome', valor: item.nome }],
           aoSalvar: async (id, valores) => {
-            await chamarApi('/api/motoristas', { metodo: 'PUT', corpo: { id, ...valores } });
+            await chamarApi('/api/motoristas', { metodo: 'PUT', corpo: { id, nome: valores.nome } });
             carregarMotoristas();
           },
           aoDesativar: async (id) => {
@@ -383,19 +375,78 @@ document.getElementById('form-motorista').addEventListener('submit', async (ev) 
   ev.preventDefault();
   const form = ev.target;
   const nome = form.nome.value.trim();
-  const email = form.email.value.trim();
-  const senha = form.senha.value;
-  const role = form.role.value;
-  if (!nome || !email || !senha) return;
+  if (!nome) return;
   try {
-    await chamarApi('/api/motoristas', { metodo: 'POST', corpo: { nome, email, senha, role } });
+    await chamarApi('/api/motoristas', { metodo: 'POST', corpo: { nome } });
     form.reset();
     carregarMotoristas();
+    carregarMotoristasParaSelect();
   } catch (erro) {
     mostrarErro(erro);
   }
 });
 carregarMotoristas();
+
+// --- Usuários (Operador Avançado / Admin) — precisam de login --------------
+const RÓTULO_PAPEL_USUARIO = { admin: 'Administrador', operador_avancado: 'Operador Avançado' };
+
+async function carregarUsuarios() {
+  if (sessao.usuario.role !== 'admin') return;
+  try {
+    const resultado = await chamarApi('/api/usuarios');
+    const corpo = document.getElementById('lista-usuarios');
+    corpo.innerHTML = '';
+    for (const item of resultado.itens) {
+      corpo.appendChild(
+        linhaEditavel({
+          id: item.id,
+          textoExibicao: `${item.nome} (${RÓTULO_PAPEL_USUARIO[item.role] || item.role})`,
+          campos: [
+            { nome: 'nome', rotulo: 'Nome', valor: item.nome },
+            {
+              nome: 'role',
+              rotulo: 'Papel',
+              tipo: 'select',
+              valor: item.role,
+              opcoes: [
+                { valor: 'operador_avancado', rotulo: 'Operador Avançado' },
+                { valor: 'admin', rotulo: 'Administrador' },
+              ],
+            },
+          ],
+          aoSalvar: async (id, valores) => {
+            await chamarApi('/api/usuarios', { metodo: 'PUT', corpo: { id, ...valores } });
+            carregarUsuarios();
+          },
+          aoDesativar: async (id) => {
+            await chamarApi(`/api/usuarios?id=${id}`, { metodo: 'DELETE' });
+            carregarUsuarios();
+          },
+        })
+      );
+    }
+  } catch (erro) {
+    mostrarErro(erro);
+  }
+}
+
+document.getElementById('form-usuario').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const nome = form.nome.value.trim();
+  const email = form.email.value.trim();
+  const senha = form.senha.value;
+  const role = form.role.value;
+  if (!nome || !email || !senha) return;
+  try {
+    await chamarApi('/api/usuarios', { metodo: 'POST', corpo: { nome, email, senha, role } });
+    form.reset();
+    carregarUsuarios();
+  } catch (erro) {
+    mostrarErro(erro);
+  }
+});
+carregarUsuarios();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js').catch(() => {});

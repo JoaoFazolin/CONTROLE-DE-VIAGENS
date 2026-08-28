@@ -70,7 +70,23 @@
 
     <section class="cartao" id="secao-motoristas">
       <h2>Motoristas</h2>
+      <p style="color: var(--cor-texto-suave); font-size: 0.85rem;">
+        Motorista é só um nome — ele não loga no app (quem lança as viagens é o Operador). Cadastre aqui pra poder vincular a um caminhão e escolher como quem dirigiu cada carga.
+      </p>
       <form id="form-motorista">
+        <label>Nome</label>
+        <input type="text" name="nome" required />
+        <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+      </form>
+      <table><tbody id="lista-motoristas"></tbody></table>
+    </section>
+
+    <section class="cartao" id="secao-usuarios">
+      <h2>Usuários (Operador / Administrador)</h2>
+      <p style="color: var(--cor-texto-suave); font-size: 0.85rem;">
+        Aqui é pra quem realmente entra no app: Operador Avançado (lança as viagens na obra) e Administrador. Precisa de e-mail e senha pra login.
+      </p>
+      <form id="form-usuario">
         <label>Nome</label>
         <input type="text" name="nome" required />
         <label>E-mail (login)</label>
@@ -79,13 +95,12 @@
         <input type="password" name="senha" minlength="6" required />
         <label>Papel</label>
         <select name="role">
-          <option value="motorista">Motorista</option>
           <option value="operador_avancado">Operador Avançado</option>
           <option value="admin">Administrador</option>
         </select>
         <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
       </form>
-      <table><tbody id="lista-motoristas"></tbody></table>
+      <table><tbody id="lista-usuarios"></tbody></table>
     </section>
   </main>
 

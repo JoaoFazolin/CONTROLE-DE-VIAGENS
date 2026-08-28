@@ -42,7 +42,10 @@ export async function atualizarCadastros() {
     Object.entries(RECURSOS).map(async ([chave, caminho]) => {
       try {
         const resultado = await chamarApi(caminho);
-        novoCache[chave] = resultado.itens;
+        // /api/motoristas devolve todo mundo em profiles (motorista, operador,
+        // admin) — só role "motorista" entra no cache usado pra escolher
+        // "quem dirigiu" (Operador/Admin não dirigem caminhão, só lançam).
+        novoCache[chave] = chave === 'motoristas' ? resultado.itens.filter((m) => m.role === 'motorista') : resultado.itens;
       } catch {
         algumErro = true; // fica com o valor antigo desse recurso, se houver
       }

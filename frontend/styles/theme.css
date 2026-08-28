@@ -416,40 +416,6 @@ th { color: var(--cor-texto-suave); font-size: 0.72rem; text-transform: uppercas
 .combobox-opcao.destacada { background: #eef4ff; }
 .combobox-vazio { padding: 12px 14px; color: var(--cor-texto-suave); font-size: 0.85rem; }
 
-/* Grade de botões grandes pra escolher o Destino — sem digitar/buscar */
-.destino-grade {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-@media (min-width: 480px) {
-  .destino-grade { grid-template-columns: repeat(3, 1fr); }
-}
-.destino-botao {
-  min-height: 64px;
-  padding: 10px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  text-align: center;
-  background: #fff;
-  border: 2px solid var(--cor-borda);
-  border-radius: var(--raio);
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.15s, background 0.15s;
-}
-.destino-botao:hover { border-color: var(--cor-marca-clara); }
-.destino-botao.selecionado {
-  border-color: var(--cor-acao);
-  background: #fff4ec;
-}
-.destino-codigo { font-size: 1.05rem; font-weight: 700; color: var(--cor-marca); }
-.destino-botao.selecionado .destino-codigo { color: var(--cor-acao-escura); }
-.destino-desc { font-size: 0.72rem; color: var(--cor-texto-suave); line-height: 1.2; }
-
 .rodape-app {
   text-align: center;
   color: var(--cor-texto-suave);
