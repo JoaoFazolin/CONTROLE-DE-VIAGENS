@@ -4,14 +4,14 @@
 // carregamos o perfil (nome/role) da tabela profiles.
 const { getSupabaseAdmin, getSupabaseAnon } = require('./supabaseAdmin');
 
-// "Gerencia" = admin OU operador_avancado. Usado em todo módulo que o
-// Operador Avançado deve acessar por completo (cadastros de caminhão/
-// escavadeira/local/destino, relatório, dashboard, lançar viagem por
-// qualquer motorista). A tela de Motoristas e a edição/exclusão de
-// viagens já lançadas continuam exclusivas do admin — não usam esta
-// função, checam role === 'admin' diretamente.
+// "Gerencia" = só admin (decisão do cliente: Operador Avançado passou a
+// só lançar a própria viagem, igual um motorista comum — sem acesso a
+// Cadastros, Relatórios, Dashboard, nem a lançar/ver viagem de outra
+// pessoa). Mantivemos o nome da função e o cargo "Operador Avançado" no
+// sistema (pode voltar a ter mais acesso no futuro se o cliente pedir),
+// só a regra de quem "pode gerenciar" que mudou pra admin-only.
 function podeGerenciar(profile) {
-  return !!profile && (profile.role === 'admin' || profile.role === 'operador_avancado');
+  return !!profile && profile.role === 'admin';
 }
 
 /**
@@ -54,7 +54,7 @@ async function requireAuth(event, options = {}) {
     return { ok: false, statusCode: 403, message: 'Ação permitida apenas para administradores.' };
   }
   if (options.gerenciaOnly && !podeGerenciar(profile)) {
-    return { ok: false, statusCode: 403, message: 'Ação permitida apenas para administradores e operadores avançados.' };
+    return { ok: false, statusCode: 403, message: 'Ação permitida apenas para administradores.' };
   }
 
   return { ok: true, user: { id: profile.id, nome: profile.nome, role: profile.role } };

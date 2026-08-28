@@ -12,7 +12,15 @@
 //   campo.definirValor(id)  -> seleciona programaticamente
 //   campo.definirOpcoes([]) -> atualiza a lista (ex: quando o cache recarrega)
 
-export function criarCombobox({ container, rotulo, obrigatorio = false, placeholder = 'Digite para buscar…', opcoes = [] }) {
+export function criarCombobox({
+  container,
+  rotulo,
+  obrigatorio = false,
+  placeholder = 'Digite para buscar…',
+  opcoes = [],
+  inputmode = 'search', // 'numeric' abre o teclado só de números (ex: campo Caminhão, que costuma ser buscado pelo número)
+  aoSelecionar = null, // callback(id) chamado quando o usuário escolhe uma opção (ex: pré-preencher outro campo)
+}) {
   let listaOpcoes = opcoes;
   let valorSelecionadoId = null;
   let indiceDestacado = -1;
@@ -20,7 +28,7 @@ export function criarCombobox({ container, rotulo, obrigatorio = false, placehol
   container.innerHTML = `
     <label>${rotulo}${obrigatorio ? ' *' : ''}</label>
     <div class="combobox">
-      <input type="text" class="cb-input" placeholder="${placeholder}" autocomplete="off" inputmode="search" />
+      <input type="text" class="cb-input" placeholder="${placeholder}" autocomplete="off" inputmode="${inputmode}" />
       <div class="combobox-lista"></div>
     </div>
   `;
@@ -56,12 +64,17 @@ export function criarCombobox({ container, rotulo, obrigatorio = false, placehol
     indiceDestacado = -1;
   }
 
-  function selecionar(id) {
+  function selecionar(id, { dispararCallback = true } = {}) {
     const opcao = listaOpcoes.find((o) => String(o.id) === String(id));
     if (!opcao) return;
     valorSelecionadoId = opcao.id;
     input.value = opcao.texto;
     fecharLista();
+    // Só dispara o callback quando é o próprio usuário escolhendo (clique/
+    // teclado) — chamadas programáticas via definirValor() (ex: preencher
+    // um formulário de edição) não devem re-disparar a cadeia de auto-
+    // preenchimento.
+    if (dispararCallback && typeof aoSelecionar === 'function') aoSelecionar(opcao.id);
   }
 
   input.addEventListener('focus', () => renderLista(input.value === selecionarTexto() ? '' : input.value));
@@ -106,7 +119,7 @@ export function criarCombobox({ container, rotulo, obrigatorio = false, placehol
   return {
     obterValor: () => valorSelecionadoId,
     definirValor(id) {
-      selecionar(id);
+      selecionar(id, { dispararCallback: false });
     },
     limpar() {
       valorSelecionadoId = null;

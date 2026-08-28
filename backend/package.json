@@ -5,6 +5,7 @@
   "description": "Netlify Functions do sistema de Controle de Viagens (LR Campos Cia & Ltda).",
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.20.1"
   }
 }

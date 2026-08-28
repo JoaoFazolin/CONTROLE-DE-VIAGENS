@@ -59,9 +59,39 @@ export function sair() {
   window.location.href = 'index.html';
 }
 
-async function renovarSessao() {
+// Exportada (não só interna) porque o api.js também chama isso: se uma
+// chamada qualquer voltar 401 (token vencido), a gente tenta renovar e
+// repetir a chamada antes de desistir e deslogar — assim o usuário não é
+// jogado pra tela de login só porque ficou um tempo sem abrir o app.
+//
+// Devolve três estados diferentes (importante pra quem chamou não confundir
+// "sem rede agora" com "sessão realmente inválida"):
+//   true  -> renovou com sucesso
+//   false -> o servidor respondeu e recusou de verdade (refresh_token
+//            inválido/revogado) — aí sim não tem mais jeito, precisa logar de novo
+//   null  -> não deu pra saber (sem conexão nesse momento) — não é motivo
+//            pra deslogar, só tenta de novo depois
+//
+// O Supabase gira o refresh_token a cada uso (o antigo para de funcionar
+// assim que um novo é emitido) — então duas renovações rodando ao mesmo
+// tempo (ex: a automática do boot cruzando com uma disparada por um 401)
+// fariam a segunda usar um refresh_token já "gasto" e falhar por engano,
+// deslogando o usuário sem necessidade. `promessaEmAndamento` garante que
+// chamadas simultâneas esperem a mesma renovação em vez de disparar duas.
+let promessaEmAndamento = null;
+
+export function renovarSessao() {
+  if (promessaEmAndamento) return promessaEmAndamento;
+
+  promessaEmAndamento = renovarSessaoInterna().finally(() => {
+    promessaEmAndamento = null;
+  });
+  return promessaEmAndamento;
+}
+
+async function renovarSessaoInterna() {
   const sessao = obterSessao();
-  if (!sessao?.refresh_token) return;
+  if (!sessao?.refresh_token) return false;
 
   try {
     const resposta = await fetch('/api/auth-refresh', {
@@ -72,23 +102,28 @@ async function renovarSessao() {
     const corpo = await resposta.json().catch(() => null);
 
     if (!resposta.ok || !corpo?.access_token) {
-      // refresh_token pode ter expirado por inatividade prolongada (meses).
-      // Não desloga agressivamente por falha de rede momentânea — só loga o
-      // problema; a próxima tentativa de chamada autenticada vai detectar
-      // 401 de verdade e aí sim pedir novo login.
+      // O servidor respondeu (não foi problema de rede) e recusou — aí sim
+      // o refresh_token expirou/foi revogado de verdade.
       console.warn('Falha ao renovar sessão:', corpo?.erro || resposta.status);
-      return;
+      return false;
     }
 
     salvarSessao({ ...sessao, access_token: corpo.access_token, refresh_token: corpo.refresh_token, expires_at: corpo.expires_at });
+    return true;
   } catch (erro) {
-    // Offline no momento da renovação — tudo bem, tenta de novo no próximo ciclo.
+    // Sem rede no momento da renovação — não é falha definitiva da sessão,
+    // só não deu pra confirmar agora; tenta de novo no próximo ciclo.
     console.warn('Sem rede para renovar sessão agora:', erro.message);
+    return null;
   }
 }
 
 export function iniciarRenovacaoAutomatica() {
   if (temporizadorRenovacao) return;
+  // Renova assim que inicia (cobre o caso de o app ter ficado fechado/
+  // suspenso por horas e o access_token já ter vencido nesse meio tempo),
+  // e depois segue renovando periodicamente.
+  renovarSessao();
   temporizadorRenovacao = setInterval(renovarSessao, INTERVALO_RENOVACAO_MS);
   // também tenta renovar assim que o app volta a ficar visível/online,
   // cobrindo o caso de o tablet ter ficado horas em espera

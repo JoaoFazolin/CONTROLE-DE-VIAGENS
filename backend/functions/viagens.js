@@ -40,7 +40,8 @@ exports.handler = comTratamentoDeErro(async function (event) {
          escavadeira:escavadeiras(id, codigo),
          local_carga:locais_carga(id, nome),
          destino:destinos(id, codigo, descricao),
-         motorista:profiles!viagens_motorista_id_fkey(id, nome)`,
+         motorista:profiles!viagens_motorista_id_fkey(id, nome),
+         operador:profiles!viagens_criado_por_fkey(id, nome)`,
         { count: 'exact' }
       )
       .order('data', { ascending: false })
@@ -54,9 +55,18 @@ exports.handler = comTratamentoDeErro(async function (event) {
       return json(400, { erro: 'Informe "data" ou "inicio" e "fim".' });
     }
 
-    // Motorista comum só vê as próprias viagens; quem gerencia vê tudo.
+    // Isolamento por quem está logado: um "motorista" (login raro, o comum é
+    // o motorista nunca logar) só vê as viagens em que ele mesmo dirigiu; já
+    // o "operador_avancado" (quem realmente loga e lança, na prática — o
+    // operador da escavadeira, que seleciona caminhão e motorista a cada
+    // carga) só vê o que ELE PRÓPRIO lançou, não importa qual motorista
+    // escolheu naquele lançamento. Quem gerencia (admin) vê tudo.
     if (!podeGerenciar(auth.user)) {
-      query = query.eq('motorista_id', auth.user.id);
+      if (auth.user.role === 'motorista') {
+        query = query.eq('motorista_id', auth.user.id);
+      } else {
+        query = query.eq('criado_por', auth.user.id);
+      }
     }
 
     if (caminhaoIdFiltro) query = query.eq('caminhao_id', caminhaoIdFiltro);
@@ -96,9 +106,12 @@ exports.handler = comTratamentoDeErro(async function (event) {
       });
     }
 
-    // Motorista comum só pode lançar viagem em nome dele mesmo; quem
-    // gerencia (admin/operador_avancado) pode lançar por qualquer motorista.
-    if (!podeGerenciar(auth.user) && motorista_id !== auth.user.id) {
+    // Só quem tem o cargo "motorista" (login raro, na prática o motorista
+    // nunca abre o app) fica travado a lançar em nome dele mesmo. O
+    // operador_avancado é quem realmente loga e lança na prática — ele
+    // escolhe livremente qual motorista dirigiu cada carga (não é ele quem
+    // dirige), e o admin também escolhe livremente.
+    if (auth.user.role === 'motorista' && motorista_id !== auth.user.id) {
       return json(403, { erro: 'Você só pode lançar viagens em seu próprio nome.' });
     }
 

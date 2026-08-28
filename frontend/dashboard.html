@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0b2545" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="icons/favicon.png" />
   <link rel="stylesheet" href="styles/theme.css" />
 </head>
 <body>
@@ -34,10 +35,6 @@
           <div class="valor" id="dash-motoristas">0</div>
           <div class="rotulo">Motoristas distintos</div>
         </div>
-        <div>
-          <div class="valor" id="dash-diesel">0</div>
-          <div class="rotulo">Diesel (L)</div>
-        </div>
       </div>
     </section>
 
@@ -54,6 +51,12 @@
     <section class="cartao">
       <h2>Viagens por destino</h2>
       <div class="grafico-barras" id="grafico-por-destino"></div>
+    </section>
+
+    <section class="cartao" id="cartao-anomalias" style="display:none;">
+      <h2>Fora do normal</h2>
+      <p class="dica-anomalias">Viagens em que o motorista foi diferente do motorista vinculado ao caminhão (substituição).</p>
+      <div id="lista-anomalias"></div>
     </section>
   </main>
 

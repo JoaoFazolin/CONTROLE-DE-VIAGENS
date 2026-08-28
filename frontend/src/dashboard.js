@@ -5,7 +5,8 @@ import { chamarApi, ErroApi } from './api.js';
 if (!exigirLogin()) throw new Error('redirecionando para login');
 
 const sessao = obterSessao();
-const ehGerente = sessao.usuario.role === 'admin' || sessao.usuario.role === 'operador_avancado';
+// Só admin (Operador Avançado perdeu acesso ao Dashboard).
+const ehGerente = sessao.usuario.role === 'admin';
 if (!ehGerente) {
   window.location.href = 'app.html';
 }
@@ -52,6 +53,28 @@ function formatarDataCurta(iso) {
   return `${dia}/${mes}`;
 }
 
+function renderizarAnomalias(anomalias) {
+  const cartao = document.getElementById('cartao-anomalias');
+  const lista = document.getElementById('lista-anomalias');
+  if (!anomalias || anomalias.length === 0) {
+    cartao.style.display = 'none';
+    lista.innerHTML = '';
+    return;
+  }
+  cartao.style.display = '';
+  lista.innerHTML = anomalias
+    .map((a) => {
+      const [ano, mes, dia] = a.data.split('-');
+      const dataCurta = `${dia}/${mes}/${ano}`;
+      const qtd = a.viagens === 1 ? '1 viagem' : `${a.viagens} viagens`;
+      return `
+        <div class="anomalia-linha">
+          <strong>${a.caminhao}</strong> — ${a.motorista} dirigiu (vinculado é ${a.motorista_vinculado}) em ${dataCurta} (${qtd})
+        </div>`;
+    })
+    .join('');
+}
+
 async function carregarDashboard() {
   avisoErro.style.display = 'none';
   try {
@@ -59,11 +82,11 @@ async function carregarDashboard() {
 
     document.getElementById('dash-total-viagens').textContent = dados.total_viagens;
     document.getElementById('dash-motoristas').textContent = dados.motoristas_distintos;
-    document.getElementById('dash-diesel').textContent = dados.total_diesel_litros;
 
     renderizarGrafico('grafico-por-dia', dados.por_dia, formatarDataCurta);
     renderizarGrafico('grafico-por-caminhao', dados.por_caminhao, (c) => c);
     renderizarGrafico('grafico-por-destino', dados.por_destino, (c) => c);
+    renderizarAnomalias(dados.anomalias);
   } catch (erro) {
     mostrarErro(erro);
   }

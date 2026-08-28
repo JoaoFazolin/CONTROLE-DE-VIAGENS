@@ -5,14 +5,10 @@ import { chamarApi, ErroApi } from './api.js';
 if (!exigirLogin()) throw new Error('redirecionando para login');
 
 const sessao = obterSessao();
-const ehGerente = sessao.usuario.role === 'admin' || sessao.usuario.role === 'operador_avancado';
+// Só admin (Operador Avançado perdeu acesso a Cadastros por completo).
+const ehGerente = sessao.usuario.role === 'admin';
 if (!ehGerente) {
   window.location.href = 'app.html';
-}
-// Tela de Motoristas continua exclusiva do admin — Operador Avançado
-// gerencia os demais cadastros, mas não cria/edita login de ninguém.
-if (sessao.usuario.role !== 'admin') {
-  document.getElementById('secao-motoristas').style.display = 'none';
 }
 
 montarCabecalho('cadastros');
@@ -120,7 +116,128 @@ function linhaEditavel({ id, textoExibicao, campos, aoSalvar, aoDesativar }) {
   return tr;
 }
 
-// --- Recursos simples (caminhões, escavadeiras, locais) -------------------
+// --- Caminhões (código + motorista vinculado, opcional) --------------------
+// Sai do loop genérico de "recursos simples" porque precisa de um select
+// com a lista de motoristas (mesmo padrão de campos extras que Destinos já
+// usa pra descrição).
+let motoristasParaSelect = [];
+
+async function carregarMotoristasParaSelect() {
+  try {
+    const resultado = await chamarApi('/api/motoristas');
+    motoristasParaSelect = resultado.itens;
+    const opcoesSelect = [{ valor: '', rotulo: 'Nenhum' }, ...motoristasParaSelect.map((m) => ({ valor: m.id, rotulo: m.nome }))];
+    const selectFormulario = document.querySelector('#form-caminhao select[name="motorista_id"]');
+    if (selectFormulario) {
+      selectFormulario.innerHTML = '';
+      opcoesSelect.forEach((op) => {
+        const opt = document.createElement('option');
+        opt.value = op.valor;
+        opt.textContent = op.rotulo;
+        selectFormulario.appendChild(opt);
+      });
+    }
+  } catch (erro) {
+    mostrarErro(erro);
+  }
+}
+
+function nomeMotorista(id) {
+  return motoristasParaSelect.find((m) => m.id === id)?.nome || null;
+}
+
+// Aceita tanto vírgula quanto ponto decimal (o pessoal de obra costuma
+// digitar "16,60"); devolve null se vazio, pra não gravar string vazia numa
+// coluna numérica do banco.
+function parseNumeroBR(texto) {
+  const limpo = String(texto ?? '').trim().replace(',', '.');
+  if (!limpo) return null;
+  const numero = Number(limpo);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function formatarNumeroBR(numero) {
+  if (numero === null || numero === undefined || numero === '') return '';
+  return String(numero).replace('.', ',');
+}
+
+async function carregarCaminhoes() {
+  try {
+    const resultado = await chamarApi('/api/caminhoes');
+    const corpo = document.getElementById('lista-caminhoes');
+    corpo.innerHTML = '';
+    for (const item of resultado.itens) {
+      const nomeVinculado = nomeMotorista(item.motorista_id);
+      corpo.appendChild(
+        linhaEditavel({
+          id: item.id,
+          textoExibicao: `${item.codigo}${nomeVinculado ? ' — ' + nomeVinculado : ''}`,
+          campos: [
+            { nome: 'codigo', rotulo: 'Código', valor: item.codigo },
+            {
+              nome: 'motorista_id',
+              rotulo: 'Motorista vinculado',
+              tipo: 'select',
+              valor: item.motorista_id || '',
+              opcoes: [{ valor: '', rotulo: 'Nenhum' }, ...motoristasParaSelect.map((m) => ({ valor: m.id, rotulo: m.nome }))],
+            },
+            { nome: 'volume', rotulo: 'Volume', valor: formatarNumeroBR(item.volume) },
+            { nome: 'volume_empolamento', rotulo: 'Volume com Empolamento 27%', valor: formatarNumeroBR(item.volume_empolamento) },
+            { nome: 'volume_aterro', rotulo: 'Volume no Aterro 38%', valor: formatarNumeroBR(item.volume_aterro) },
+          ],
+          aoSalvar: async (id, valores) => {
+            await chamarApi('/api/caminhoes', {
+              metodo: 'PUT',
+              corpo: {
+                id,
+                codigo: valores.codigo,
+                motorista_id: valores.motorista_id || null,
+                volume: parseNumeroBR(valores.volume),
+                volume_empolamento: parseNumeroBR(valores.volume_empolamento),
+                volume_aterro: parseNumeroBR(valores.volume_aterro),
+              },
+            });
+            carregarCaminhoes();
+          },
+          aoDesativar: async (id) => {
+            await chamarApi(`/api/caminhoes?id=${id}`, { metodo: 'DELETE' });
+            carregarCaminhoes();
+          },
+        })
+      );
+    }
+  } catch (erro) {
+    mostrarErro(erro);
+  }
+}
+
+document.getElementById('form-caminhao').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const codigo = form.codigo.value.trim();
+  const motorista_id = form.motorista_id.value || null;
+  if (!codigo) return;
+  try {
+    await chamarApi('/api/caminhoes', {
+      metodo: 'POST',
+      corpo: {
+        codigo,
+        motorista_id,
+        volume: parseNumeroBR(form.volume.value),
+        volume_empolamento: parseNumeroBR(form.volume_empolamento.value),
+        volume_aterro: parseNumeroBR(form.volume_aterro.value),
+      },
+    });
+    form.reset();
+    carregarCaminhoes();
+  } catch (erro) {
+    mostrarErro(erro);
+  }
+});
+
+carregarMotoristasParaSelect().then(carregarCaminhoes);
+
+// --- Recursos simples (escavadeiras, locais) -------------------------------
 async function carregarSimples({ caminho, campo, campoRotulo, listaId }) {
   try {
     const resultado = await chamarApi(caminho);

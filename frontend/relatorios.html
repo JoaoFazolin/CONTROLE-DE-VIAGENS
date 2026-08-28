@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0b2545" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="icons/favicon.png" />
   <link rel="stylesheet" href="styles/theme.css" />
 </head>
 <body>
@@ -23,11 +24,23 @@
       <label for="campo-fim">Até</label>
       <input type="date" id="campo-fim" required />
 
-      <div class="linha-botoes">
-        <button type="button" class="btn btn-primario" id="btn-exportar">Baixar planilha (.xlsx)</button>
+      <div class="barra-filtros" style="margin-top:8px;">
+        <div id="filtro-caminhao"></div>
+        <div id="filtro-motorista"></div>
+        <div id="filtro-destino"></div>
       </div>
       <p style="color: var(--cor-texto-suave); font-size: 0.85rem;">
-        A planilha traz todas as viagens do período numa aba, e os totais por dia (viagens, diesel, motoristas distintos) em outra aba.
+        Deixe os filtros em "Todos" pra baixar o relatório geral (todos os caminhões e motoristas juntos), ou escolha um caminhão/motorista/destino específico pra recortar só aquele.
+      </p>
+
+      <div id="aviso-volume" class="aviso aviso-atencao" style="display:none;"></div>
+
+      <div class="linha-botoes">
+        <button type="button" class="btn btn-primario" id="btn-exportar">Baixar planilha (.xlsx)</button>
+        <button type="button" class="btn btn-secundario" id="btn-exportar-pdf">Baixar PDF</button>
+      </div>
+      <p style="color: var(--cor-texto-suave); font-size: 0.85rem;">
+        A planilha traz duas abas: "Resumo do dia" (agrupado por caminhão/escavadeira/local/destino, já somando as viagens e o volume) e "Resumo de cada caminhão" (uma linha por viagem, com o operador, horário e filtro do Excel ligado em todas as colunas). O PDF traz as duas tabelas juntas, prontas pra imprimir.
       </p>
     </section>
   </main>

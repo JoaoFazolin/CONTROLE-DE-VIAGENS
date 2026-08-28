@@ -67,6 +67,31 @@ html, body {
   letter-spacing: 0.2px;
 }
 
+/* Logo LR Campos — fundo transparente, pensada pra sentar direto no
+   azul-marinho (--cor-marca) do header. Em fundos claros (ex: tela de
+   login), usar dentro de .logo-lr-caixa, que dá uma "placa" da mesma cor
+   por trás pra manter o contraste. */
+.logo-lr {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+
+.logo-lr-caixa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cor-marca);
+  padding: 12px 18px;
+  border-radius: 10px;
+  width: fit-content;
+  margin: 0 auto 14px;
+}
+
+.logo-lr-caixa .logo-lr {
+  height: 38px;
+}
+
 .app-header .subtitulo {
   font-size: 0.78rem;
   color: #cdd8e6;
@@ -214,10 +239,11 @@ textarea:focus {
 .aviso-erro { background: var(--cor-alerta-fundo); color: var(--cor-alerta); }
 .aviso-pendente { background: var(--cor-pendente-fundo); color: var(--cor-pendente); }
 .aviso-sucesso { background: #e9f7ef; color: var(--cor-sucesso); }
+.aviso-atencao { background: #fff4e5; color: #7a4a00; }
 
 .resumo-dia {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   text-align: center;
 }
@@ -232,6 +258,31 @@ textarea:focus {
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
+.resumo-ultima-viagem {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #eef4ff;
+  border-radius: var(--raio);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--cor-marca-clara);
+  font-weight: 600;
+}
+
+.dica-anomalias {
+  font-size: 0.8rem;
+  color: var(--cor-texto-suave);
+  margin: -4px 0 10px;
+}
+.anomalia-linha {
+  padding: 8px 10px;
+  border-radius: var(--raio);
+  background: #fff4e5;
+  color: #7a4a00;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+.anomalia-linha:last-child { margin-bottom: 0; }
 
 table {
   width: 100%;
@@ -272,6 +323,11 @@ th { color: var(--cor-texto-suave); font-size: 0.72rem; text-transform: uppercas
   flex-shrink: 0;
 }
 .status-conexao.offline .ponto { background: var(--cor-acao); }
+.status-sincronizacao {
+  font-size: 0.72rem;
+  color: #9fb2c9;
+  margin-top: 2px;
+}
 
 /* Modal de confirmação / edição */
 .modal-fundo {
@@ -360,6 +416,40 @@ th { color: var(--cor-texto-suave); font-size: 0.72rem; text-transform: uppercas
 .combobox-opcao.destacada { background: #eef4ff; }
 .combobox-vazio { padding: 12px 14px; color: var(--cor-texto-suave); font-size: 0.85rem; }
 
+/* Grade de botões grandes pra escolher o Destino — sem digitar/buscar */
+.destino-grade {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 480px) {
+  .destino-grade { grid-template-columns: repeat(3, 1fr); }
+}
+.destino-botao {
+  min-height: 64px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  background: #fff;
+  border: 2px solid var(--cor-borda);
+  border-radius: var(--raio);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.destino-botao:hover { border-color: var(--cor-marca-clara); }
+.destino-botao.selecionado {
+  border-color: var(--cor-acao);
+  background: #fff4ec;
+}
+.destino-codigo { font-size: 1.05rem; font-weight: 700; color: var(--cor-marca); }
+.destino-botao.selecionado .destino-codigo { color: var(--cor-acao-escura); }
+.destino-desc { font-size: 0.72rem; color: var(--cor-texto-suave); line-height: 1.2; }
+
 .rodape-app {
   text-align: center;
   color: var(--cor-texto-suave);
@@ -370,5 +460,4 @@ th { color: var(--cor-texto-suave); font-size: 0.72rem; text-transform: uppercas
 /* Tablet/desktop: dá mais respiro sem quebrar o layout de coluna única */
 @media (min-width: 640px) {
   main { padding: 24px; }
-  .resumo-dia { grid-template-columns: repeat(3, 1fr); }
 }

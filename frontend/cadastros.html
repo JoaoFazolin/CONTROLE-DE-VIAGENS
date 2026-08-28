@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0b2545" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="icons/favicon.png" />
   <link rel="stylesheet" href="styles/theme.css" />
 </head>
 <body>
@@ -17,9 +18,19 @@
 
     <section class="cartao">
       <h2>Caminhões</h2>
-      <form class="form-cadastro" data-recurso="caminhoes" data-campo="codigo">
+      <form id="form-caminhao">
         <label>Código (ex: CB 236)</label>
-        <input type="text" name="valor" required />
+        <input type="text" name="codigo" required />
+        <label>Motorista vinculado (opcional)</label>
+        <select name="motorista_id">
+          <option value="">Nenhum</option>
+        </select>
+        <label>Volume (opcional)</label>
+        <input type="text" name="volume" inputmode="decimal" placeholder="ex: 16,60" />
+        <label>Volume com Empolamento 27% (opcional)</label>
+        <input type="text" name="volume_empolamento" inputmode="decimal" placeholder="ex: 13,07" />
+        <label>Volume no Aterro 38% (opcional)</label>
+        <input type="text" name="volume_aterro" inputmode="decimal" placeholder="ex: 11,97" />
         <div class="linha-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
       </form>
       <table><tbody id="lista-caminhoes"></tbody></table>

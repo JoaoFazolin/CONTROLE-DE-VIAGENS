@@ -21,7 +21,8 @@ lr-controle-viagens/
 ├── server/           # Docker só para pré-visualizar o frontend estático
 ├── supabase/
 │   ├── schema.sql                                  # schema base (rodar 1x)
-│   └── migration_001_operador_avancado_e_edicao.sql # rodar depois do schema.sql
+│   ├── migration_001_operador_avancado_e_edicao.sql # rodar depois do schema.sql
+│   └── migration_002_vinculo_motorista_caminhao.sql # rodar depois da migration_001
 ├── test-api.js       # diagnóstico rápido do backend (node test-api.js)
 └── netlify.toml       # config de build/rotas da Netlify (precisa ficar na raiz)
 ```
@@ -43,6 +44,8 @@ lr-controle-viagens/
 2. Vá em **SQL Editor** e rode, nesta ordem, o conteúdo inteiro de:
    1. `supabase/schema.sql`
    2. `supabase/migration_001_operador_avancado_e_edicao.sql`
+   3. `supabase/migration_002_vinculo_motorista_caminhao.sql`
+   4. `supabase/migration_003_volume_caminhao.sql`
 3. Em **Project Settings → API**, anote as três coisas:
    - **Project URL**
    - **anon public key**
@@ -102,9 +105,11 @@ No celular/tablet, abra o site no navegador (Chrome no Android é o mais confiá
 
 ## Papéis de usuário
 
-- **Motorista**: loga e lança as próprias viagens. Só vê/edita os próprios lançamentos (não vê Cadastros, Relatórios nem Dashboard).
-- **Operador Avançado**: acesso quase igual ao admin — gerencia cadastros de caminhão/escavadeira/local/destino, lança viagem por qualquer motorista, vê Relatórios e Dashboard. **Não** gerencia Motoristas (usuários) e **não** edita/exclui viagens já lançadas — isso continua exclusivo do Administrador.
-- **Administrador**: acesso total — tudo que o Operador Avançado faz, mais: cria/edita/desativa Motoristas (incluindo promover alguém a Operador Avançado), edita ou exclui qualquer viagem já lançada (inclusive corrigir manualmente o número da Ordem, se algum dia ficar errado).
+Na prática, quem loga e lança na obra é o **Operador Avançado** — o operador de cada escavadeira (ex: EH 347, EH 349) — não o motorista do caminhão (o motorista não abre o app). Por isso o cargo "Motorista" existe no cadastro só como **nome pra aparecer na lista** de quem dirigiu cada carga; ele não costuma ter login de verdade.
+
+- **Operador Avançado**: só a tela **Viagens** fica ativa (não vê Cadastros, Relatórios nem Dashboard). Ele escolhe **livremente** qual Caminhão e qual Motorista em cada lançamento — não é ele quem dirige, então não trava no próprio nome. Isso cobre o caso de um motorista faltar: nesse dia o operador simplesmente escolhe outro nome no campo Motorista pra aquele caminhão; no dia seguinte, quando o motorista titular volta, é só escolher o nome dele de novo (nada fica "preso" permanentemente — é uma escolha a cada lançamento, não uma troca de cadastro). O relatório Excel sempre mostra os dois: quem **operou** (lançou) e quem **dirigiu** (motorista daquela viagem específica). Cada operador só vê/edita o que **ele mesmo** lançou (não o que outro operador lançou, mesmo que pro mesmo motorista).
+- **Motorista**: cargo raro de logar de verdade (normalmente é só um nome no cadastro, escolhido pelo operador a cada viagem). Se algum dia um motorista tiver login próprio, aí sim ele só lança/vê as próprias viagens (fica travado no próprio nome, como no vínculo motorista→caminhão abaixo).
+- **Administrador**: acesso total — o único que vê Cadastros, Relatórios e Dashboard, gerencia Motoristas/Operadores (incluindo promover alguém a Operador Avançado), lança viagem por qualquer motorista, e edita/exclui qualquer viagem já lançada (inclusive corrigir manualmente o número da Ordem, se algum dia ficar errado).
 
 Depois de rodar a `migration_001_operador_avancado_e_edicao.sql` (ver Passo 1), promova alguém a Operador Avançado direto pela tela **Cadastros → Motoristas → Editar**, ou pelo SQL Editor:
 ```sql
@@ -116,14 +121,26 @@ where id = (select id from auth.users where email = 'email@exemplo.com');
 
 Na tela **Viagens → Histórico**, o Administrador tem botões **Editar** e **Excluir** em cada linha. Editar reabre o formulário do topo já preenchido (incluindo o campo **Ordem**, pra corrigir manualmente a sequência do dia se precisar) — é só ajustar e salvar. Antes de qualquer gravação (nova viagem ou edição), aparece uma tela de confirmação com os dados digitados, pra reduzir erro de digitação.
 
+## Vínculo motorista → caminhão
+
+Na tela **Cadastros → Caminhões** (só admin), o admin pode escolher um **motorista vinculado** a cada caminhão (opcional, um motorista só pode estar vinculado a um caminhão por vez), além do **Volume**, **Volume com Empolamento 27%** e **Volume no Aterro 38%** (opcionais, digitados manualmente — usados no relatório Excel).
+
+Isso é usado como **sugestão**, não trava nada: quando o Operador Avançado (ou o admin) escolhe um caminhão que tem motorista vinculado, o campo **Motorista** já vem pré-preenchido com esse motorista — mas continua editável, então se o motorista titular faltar, o operador troca pra outro nome sem esforço extra. Só no caso raro de um **motorista de verdade logar** é que o campo Caminhão vem travado nele automaticamente (nesse caso específico, sem opção de trocar, já que é ele mesmo quem está lançando a própria viagem).
+
+O campo **Total de viagens nesse trajeto** vem sempre fixo em 1 pra quem lança (Motorista/Operador Avançado); só o admin pode alterar esse número, ao editar uma viagem depois.
+
 ## Histórico, filtros e Dashboard
 
-- A seção **Histórico de viagens** (tela Viagens) mostra os últimos 30 dias por padrão, com filtro de período e — pra quem gerencia — filtro por caminhão/motorista/destino. Carrega 50 de cada vez, com botão **Carregar mais**.
-- A tela **Dashboard** (admin/Operador Avançado) mostra totais do período e três gráficos simples: viagens por dia, por caminhão e por destino.
+- A seção **Histórico de viagens** (tela Viagens) mostra os últimos 30 dias por padrão, com filtro de período e — só pro admin — filtro por caminhão/motorista/destino. Carrega 50 de cada vez, com botão **Carregar mais**.
+- A tela **Dashboard** (só admin) mostra totais do período e três gráficos simples: viagens por dia, por caminhão e por destino.
 
 ## Relatório em Excel
 
-Tela **Relatórios** (admin/Operador Avançado): escolhe um período e baixa um `.xlsx` com todas as viagens detalhadas numa aba, e os totais por dia (viagens, diesel, motoristas distintos) em outra aba.
+Tela **Relatórios** (só admin): escolhe um período e baixa um `.xlsx` com duas abas:
+- **Resumo do dia**: agrupado por Data + Caminhão + Escavadeira + Local de carga/corte + Destino, somando o total de viagens de cada grupo e calculando o Volume por viagem/Volume no Aterro (a partir do volume cadastrado do caminhão).
+- **Resumo de cada caminhão**: uma linha por viagem lançada, com o **Operador** que lançou (primeira coluna, antes da Data — o operador da escavadeira) e o **Motorista** que dirigiu aquela carga específica (logo depois do Caminhão — pode variar viagem a viagem, ex: quando um motorista falta e outro assume o caminhão), além de Ordem, horário exato e filtro do Excel (setinhas no cabeçalho) ligado em todas as colunas.
+
+Por padrão sai **geral** (todos os caminhões e motoristas juntos) — mas tem filtros opcionais de caminhão, motorista e destino, pra recortar o relatório só daquele equipamento/pessoa quando precisar.
 
 ## Testar se o backend está respondendo (diagnóstico rápido)
 

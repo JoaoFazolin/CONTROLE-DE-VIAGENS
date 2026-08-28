@@ -3,17 +3,28 @@
 // principal, ativo, criado_em. Isso evita repetir a mesma lógica 4x.
 const { getSupabaseAdmin } = require('./supabaseAdmin');
 const { requireAuth } = require('./auth');
-// Escrita permitida pra admin e operador_avancado (ver lib/auth.js) —
-// mesmo padrão do sistema de combustível pros cadastros de equipamento/obra.
+// Escrita permitida só pra admin (gerenciaOnly — ver lib/auth.js).
 const { json, noContentPreflight, safeJsonParse } = require('./http');
 
 /**
  * @param {object} event
- * @param {{ table: string, campo: string, campoLabel: string, extras?: string[] }} config
+ * @param {{ table: string, campo: string, campoLabel: string, extras?: string[], mensagensDuplicidade?: object }} config
  *   table: nome da tabela no Postgres
  *   campo: nome da coluna "principal" (codigo | nome)
  *   extras: outras colunas aceitas no POST/PUT (ex: ['descricao'] para destinos)
+ *   mensagensDuplicidade: mensagem customizada por coluna quando a violação de
+ *     unicidade (23505) não é no campo principal — ex: { motorista_id: '...' }
+ *     em caminhões, cujo vínculo motorista→caminhão também é unique. Sem
+ *     isso, o erro genérico ("já existe um registro com esse código") ficaria
+ *     enganoso quando quem colidiu foi outra coluna.
  */
+function mensagemDeDuplicidade(error, campoLabel, mensagensDuplicidade) {
+  const texto = `${error.message || ''} ${error.details || ''}`;
+  for (const [coluna, mensagem] of Object.entries(mensagensDuplicidade || {})) {
+    if (texto.includes(coluna)) return mensagem;
+  }
+  return `Já existe um registro com esse ${campoLabel}.`;
+}
 async function handleCrudCadastro(event, config) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   try {
@@ -28,7 +39,7 @@ async function handleCrudCadastro(event, config) {
 }
 
 async function executarCrudCadastro(event, config) {
-  const { table, campo, campoLabel, extras = [] } = config;
+  const { table, campo, campoLabel, extras = [], mensagensDuplicidade } = config;
   const supabase = getSupabaseAdmin();
 
   // Leitura: qualquer usuário autenticado (motorista precisa ver as opções
@@ -46,7 +57,7 @@ async function executarCrudCadastro(event, config) {
     return json(200, { itens: data });
   }
 
-  // Escrita: admin ou operador_avancado.
+  // Escrita: só admin (gerenciaOnly).
   const auth = await requireAuth(event, { gerenciaOnly: true });
   if (!auth.ok) return json(auth.statusCode, { erro: auth.message });
 
@@ -61,7 +72,7 @@ async function executarCrudCadastro(event, config) {
     }
     const { data, error } = await supabase.from(table).insert(payload).select().single();
     if (error) {
-      if (error.code === '23505') return json(409, { erro: `Já existe um registro com esse ${campoLabel}.` });
+      if (error.code === '23505') return json(409, { erro: mensagemDeDuplicidade(error, campoLabel, mensagensDuplicidade) });
       return json(500, { erro: 'Erro ao cadastrar.', detalhe: error.message });
     }
     return json(201, { item: data });
@@ -81,7 +92,7 @@ async function executarCrudCadastro(event, config) {
 
     const { data, error } = await supabase.from(table).update(payload).eq('id', id).select().single();
     if (error) {
-      if (error.code === '23505') return json(409, { erro: `Já existe um registro com esse ${campoLabel}.` });
+      if (error.code === '23505') return json(409, { erro: mensagemDeDuplicidade(error, campoLabel, mensagensDuplicidade) });
       return json(500, { erro: 'Erro ao atualizar.', detalhe: error.message });
     }
     return json(200, { item: data });

@@ -3,6 +3,7 @@ import { montarCabecalho } from '../layout/cabecalho.js';
 import { chamarApi, ErroApi } from './api.js';
 import { atualizarCadastros, obterCacheLocal } from './cadastrosCache.js';
 import { criarCombobox } from './combobox.js';
+import { criarBotoesDestino } from './botoesDestino.js';
 import { salvarViagem, novoClientUuid, aoMudarFila, iniciarSincronizacaoAutomatica, tentarSincronizarFila } from './fila.js';
 
 if (!exigirLogin()) throw new Error('redirecionando para login');
@@ -11,18 +12,25 @@ montarCabecalho('viagens');
 iniciarSincronizacaoAutomatica();
 
 const sessao = obterSessao();
-// "Gerente" = admin ou operador_avancado: pode lançar viagem por qualquer
-// motorista e ver o histórico completo. Editar/excluir uma viagem já
-// lançada continua exclusivo do admin (ehAdminEstrito), igual ao sistema
-// de combustível.
-const ehGerente = sessao.usuario.role === 'admin' || sessao.usuario.role === 'operador_avancado';
+// "Gerente" = só admin (acesso a Cadastros/Relatórios/Dashboard, filtros do
+// histórico, editar/excluir viagem já lançada).
+const ehGerente = sessao.usuario.role === 'admin';
 const ehAdminEstrito = sessao.usuario.role === 'admin';
+// Na prática quem loga e lança é o Operador Avançado (o operador da
+// escavadeira — EH 347, EH 349 etc) — o motorista do caminhão não abre o
+// app. Por isso o Operador Avançado escolhe livremente qual motorista
+// dirigiu cada carga (não trava no próprio nome como um motorista de
+// verdade travaria, se algum dia logasse). Cada operador só vê/edita o que
+// ELE MESMO lançou (isolamento por "quem lançou", não por "quem dirigiu" —
+// ver filtro no backend).
+const podeEscolherLivre = sessao.usuario.role !== 'motorista';
 
 const campoData = document.getElementById('campo-data');
 campoData.value = dataDeHojeLocal();
 
 let comboCaminhao, comboEscavadeira, comboLocal, comboDestino, comboMotorista;
 let filtroCaminhao, filtroMotorista, filtroDestino;
+let caminhaoVinculadoId = null; // motorista comum: id do caminhão travado pra ele (null = sem vínculo)
 let idEmEdicao = null; // client_uuid não muda; guardamos o id da viagem quando estamos editando
 let offsetHistorico = 0;
 
@@ -44,6 +52,17 @@ function montarCombos(cache) {
     rotulo: 'Caminhão',
     obrigatorio: true,
     opcoes: opcoesDe(cache.caminhoes, (c) => c.codigo),
+    inputmode: 'numeric', // motorista geralmente busca pelo número do caminhão
+    // Quem escolhe o motorista livremente (admin ou operador) ganha esse
+    // atalho: escolher um caminhão que já tem vínculo pré-preenche o
+    // Motorista (continua editável — útil pra trocar quando o motorista
+    // fixo daquele caminhão faltou e outro assumiu naquele dia).
+    aoSelecionar: podeEscolherLivre
+      ? (caminhaoId) => {
+          const caminhao = (cache.caminhoes || []).find((c) => c.id === caminhaoId);
+          if (caminhao?.motorista_id) comboMotorista.definirValor(caminhao.motorista_id);
+        }
+      : null,
   });
   comboEscavadeira = criarCombobox({
     container: document.getElementById('campo-escavadeira'),
@@ -52,14 +71,14 @@ function montarCombos(cache) {
   });
   comboLocal = criarCombobox({
     container: document.getElementById('campo-local'),
-    rotulo: 'Local da carga (opcional)',
+    rotulo: 'Local de carga/corte (opcional)',
     opcoes: opcoesDe(cache.locais_carga, (l) => l.nome),
   });
-  comboDestino = criarCombobox({
+  comboDestino = criarBotoesDestino({
     container: document.getElementById('campo-destino'),
     rotulo: 'Destino',
     obrigatorio: true,
-    opcoes: opcoesDe(cache.destinos, (d) => (d.descricao ? `${d.codigo} — ${d.descricao}` : d.codigo)),
+    destinos: cache.destinos || [],
   });
   comboMotorista = criarCombobox({
     container: document.getElementById('campo-motorista'),
@@ -68,12 +87,45 @@ function montarCombos(cache) {
     opcoes: opcoesDe(cache.motoristas, (m) => m.nome),
   });
 
-  if (!ehGerente) {
+  if (!podeEscolherLivre) {
+    // Só cai aqui um login com cargo "motorista" de verdade (raro na
+    // prática) — trava no próprio nome e no caminhão vinculado, como antes.
     comboMotorista.definirValor(sessao.usuario.id);
     const inputMotorista = document.querySelector('#campo-motorista .cb-input');
     if (inputMotorista) {
       inputMotorista.disabled = true;
       inputMotorista.style.background = '#f0f1f3';
+    }
+
+    // Caminhão vinculado ao motorista (cadastrado em Cadastros → Caminhões):
+    // vem pré-preenchido e travado, pra não precisar escolher toda vez. Se
+    // ainda não tiver nenhum caminhão vinculado a ele, deixa livre pra
+    // escolher normalmente (não trava o lançamento por falta de cadastro).
+    const caminhaoVinculado = (cache.caminhoes || []).find((c) => c.motorista_id === sessao.usuario.id);
+    caminhaoVinculadoId = caminhaoVinculado?.id || null;
+    const avisoSemVinculo = document.getElementById('aviso-sem-caminhao-vinculado');
+    if (caminhaoVinculado) {
+      comboCaminhao.definirValor(caminhaoVinculado.id);
+      const inputCaminhao = document.querySelector('#campo-caminhao .cb-input');
+      if (inputCaminhao) {
+        inputCaminhao.disabled = true;
+        inputCaminhao.style.background = '#f0f1f3';
+      }
+      if (avisoSemVinculo) avisoSemVinculo.style.display = 'none';
+    } else if (avisoSemVinculo) {
+      avisoSemVinculo.style.display = 'block';
+    }
+  }
+
+  // Total de viagens sempre 1 pra quem lança na obra (motorista ou operador
+  // avançado) — o apontador não corrige esse número na hora; se precisar
+  // corrigir depois, só o admin edita.
+  if (!ehGerente) {
+    const campoTotalViagens = document.getElementById('campo-total-viagens');
+    if (campoTotalViagens) {
+      campoTotalViagens.value = 1;
+      campoTotalViagens.readOnly = true;
+      campoTotalViagens.style.background = '#f0f1f3';
     }
   }
 
@@ -132,7 +184,6 @@ function entrarModoEdicao(viagem) {
   comboDestino.definirValor(viagem.destino?.id);
   comboMotorista.definirValor(viagem.motorista?.id);
   document.getElementById('campo-total-viagens').value = viagem.total_viagens;
-  document.getElementById('campo-diesel').value = viagem.diesel_litros || '';
   document.getElementById('btn-salvar-viagem').textContent = 'Salvar edição';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -145,11 +196,12 @@ function sairModoEdicao() {
   document.getElementById('btn-salvar-viagem').textContent = 'Salvar viagem';
   form.reset();
   campoData.value = dataDeHojeLocal();
-  comboCaminhao.limpar();
+  if (caminhaoVinculadoId) comboCaminhao.definirValor(caminhaoVinculadoId);
+  else comboCaminhao.limpar();
   comboEscavadeira.limpar();
   comboLocal.limpar();
   comboDestino.limpar();
-  if (ehGerente) comboMotorista.limpar();
+  if (podeEscolherLivre) comboMotorista.limpar();
   document.getElementById('campo-total-viagens').value = 1;
 }
 
@@ -201,7 +253,6 @@ form.addEventListener('submit', async (ev) => {
   const destino_id = comboDestino.obterValor();
   const motorista_id = comboMotorista.obterValor();
   const totalViagens = Number(document.getElementById('campo-total-viagens').value || 1);
-  const dieselValor = document.getElementById('campo-diesel').value;
 
   if (!caminhao_id || !destino_id || !motorista_id) {
     avisoErro.textContent = 'Preencha caminhão, destino e motorista.';
@@ -210,18 +261,27 @@ form.addEventListener('submit', async (ev) => {
   }
 
   const textoCaminhao = document.querySelector('#campo-caminhao .cb-input').value;
-  const textoDestino = document.querySelector('#campo-destino .cb-input').value;
+  const textoDestino = comboDestino.obterTexto();
   const textoMotorista = document.querySelector('#campo-motorista .cb-input').value;
+
+  // Capturado aqui, no instante do clique em "Salvar" — é esse valor (não
+  // um "agora" recalculado na hora de sincronizar) que vai tanto na tela de
+  // confirmação quanto no registro salvo, mesmo que fique horas na fila
+  // offline esperando internet.
+  const agoraIso = new Date().toISOString();
 
   const linhasConfirmacao = [
     { rotulo: 'Data', valor: campoData.value },
     { rotulo: 'Caminhão', valor: textoCaminhao },
     { rotulo: 'Destino', valor: textoDestino },
     { rotulo: 'Total de viagens', valor: totalViagens },
-    { rotulo: 'Diesel (L)', valor: dieselValor || '—' },
     { rotulo: 'Motorista', valor: textoMotorista },
   ];
-  if (idEmEdicao) linhasConfirmacao.splice(1, 0, { rotulo: 'Ordem', valor: campoOrdem.value });
+  if (idEmEdicao) {
+    linhasConfirmacao.splice(1, 0, { rotulo: 'Ordem', valor: campoOrdem.value });
+  } else {
+    linhasConfirmacao.push({ rotulo: 'Horário do registro', valor: formatarHorario(agoraIso) });
+  }
 
   const confirmou = await pedirConfirmacao(linhasConfirmacao);
   if (!confirmou) return;
@@ -241,7 +301,6 @@ form.addEventListener('submit', async (ev) => {
           local_carga_id: comboLocal.obterValor(),
           destino_id,
           total_viagens: totalViagens,
-          diesel_litros: dieselValor ? Number(dieselValor) : null,
           motorista_id,
         },
       });
@@ -259,9 +318,9 @@ form.addEventListener('submit', async (ev) => {
         local_carga_id: comboLocal.obterValor(),
         destino_id,
         total_viagens: totalViagens,
-        diesel_litros: dieselValor ? Number(dieselValor) : null,
+        diesel_litros: null, // campo de diesel removido do lançamento a pedido do cliente
         motorista_id,
-        registrado_em: new Date().toISOString(), // hora capturada NO APARELHO, agora
+        registrado_em: agoraIso, // hora capturada NO APARELHO, no clique em "Salvar"
       };
 
       const resultado = await salvarViagem(payload);
@@ -292,7 +351,21 @@ async function carregarResumoEViagens() {
     const resumo = await chamarApi(`/api/resumo-dia?data=${dia}`);
     document.getElementById('resumo-total-viagens').textContent = resumo.total_viagens;
     document.getElementById('resumo-motoristas').textContent = resumo.motoristas_distintos;
-    document.getElementById('resumo-diesel').textContent = resumo.total_diesel_litros;
+
+    const elUltima = document.getElementById('resumo-ultima-viagem');
+    const u = resumo.ultima_viagem;
+    if (u && (u.caminhao || u.escavadeira)) {
+      const horario = u.registrado_em
+        ? new Date(u.registrado_em).toLocaleTimeString('pt-BR', { timeZone: FUSO_HORARIO, hour: '2-digit', minute: '2-digit', hour12: false })
+        : '—';
+      const partes = [];
+      if (u.escavadeira) partes.push(`${u.escavadeira} carregou`);
+      if (u.caminhao) partes.push(u.caminhao);
+      elUltima.textContent = `Última viagem: ${partes.join(' ')} às ${horario}`;
+      elUltima.style.display = '';
+    } else {
+      elUltima.style.display = 'none';
+    }
   } catch (erro) {
     console.warn('Não foi possível atualizar o resumo agora:', erro.message);
   }
@@ -318,6 +391,23 @@ const padrao = periodoPadraoHistorico();
 filtroInicio.value = padrao.inicio;
 filtroFim.value = padrao.fim;
 
+// Fuso fixo (mesmo critério do relatório em Excel): o horário mostrado
+// aqui é o `registrado_em` — a hora capturada NO APARELHO do motorista no
+// momento do lançamento, não a hora em que sincronizou. Fixamos o fuso
+// pra não depender do relógio/fuso configurado no navegador de quem está
+// olhando o histórico.
+const FUSO_HORARIO = 'America/Sao_Paulo';
+function formatarHorario(isoString) {
+  if (!isoString) return '—';
+  return new Date(isoString).toLocaleTimeString('pt-BR', {
+    timeZone: FUSO_HORARIO,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
 function linhaHtml(v) {
   const botoes = [];
   if (ehAdminEstrito) {
@@ -327,6 +417,7 @@ function linhaHtml(v) {
   return `
     <tr>
       <td>${v.data}</td>
+      <td>${formatarHorario(v.registrado_em)}</td>
       <td>${v.ordem}</td>
       <td>${v.caminhao?.codigo || '—'}</td>
       <td>${v.destino?.codigo || '—'}</td>
@@ -338,12 +429,22 @@ function linhaHtml(v) {
 
 let viagensCarregadas = [];
 
+// No boot da tela, mais de uma coisa chama carregarHistorico(true) em
+// paralelo (depois de carregar os cadastros, e depois de tentar
+// sincronizar a fila offline) — sem essa trava, as duas respostas podem
+// voltar entrelaçadas e duplicar as linhas na tabela (uma reinicia depois
+// que a outra já tinha inserido). O "token" garante que só a chamada mais
+// recente tem permissão de escrever na tabela; uma resposta atrasada de
+// uma chamada antiga é simplesmente descartada.
+let tokenHistorico = 0;
+
 async function carregarHistorico(reiniciar) {
   if (reiniciar) {
     offsetHistorico = 0;
     viagensCarregadas = [];
     corpoTabela.innerHTML = '';
   }
+  const tokenDestaChamada = ++tokenHistorico;
 
   const params = new URLSearchParams({
     inicio: filtroInicio.value,
@@ -361,6 +462,8 @@ async function carregarHistorico(reiniciar) {
 
   try {
     const resultado = await chamarApi(`/api/viagens?${params.toString()}`);
+    if (tokenDestaChamada !== tokenHistorico) return; // uma chamada mais nova já assumiu — descarta essa resposta atrasada
+
     viagensCarregadas = viagensCarregadas.concat(resultado.itens);
     corpoTabela.insertAdjacentHTML('beforeend', resultado.itens.map(linhaHtml).join(''));
     offsetHistorico += resultado.itens.length;
@@ -415,6 +518,24 @@ function atualizarAvisoPendentes(fila) {
   aviso.textContent = `${fila.length} viagem(ns) aguardando internet para sincronizar.`;
 }
 aoMudarFila(atualizarAvisoPendentes);
+
+// --- Reagir quando a internet volta ----------------------------------------
+// O aviso "Sem internet agora — usando os cadastros salvos..." só some
+// quando os cadastros são buscados de novo com sucesso — sem isso, ficava
+// preso na tela mesmo depois da conexão voltar, porque nada disparava uma
+// nova tentativa sozinho.
+function aoReconectar() {
+  carregarCadastros();
+  carregarResumoEViagens();
+  tentarSincronizarFila().then(() => {
+    carregarResumoEViagens();
+    carregarHistorico(true);
+  });
+}
+window.addEventListener('online', aoReconectar);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navigator.onLine) aoReconectar();
+});
 
 // --- Boot -------------------------------------------------------------
 carregarCadastros().then(() => carregarHistorico(true));

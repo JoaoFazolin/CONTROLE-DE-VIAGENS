@@ -3,6 +3,7 @@
 // <div id="cabecalho-app"></div> no topo do <body>.
 import { obterSessao, sair } from '../src/auth.js';
 import { obterPendentes, aoMudarFila, tentarSincronizarFila } from '../src/fila.js';
+import { obterUltimaSincronizacao, formatarTempoDecorrido, aoSincronizar } from '../src/statusSincronizacao.js';
 
 const RÓTULO_PAPEL = { admin: 'Administrador', operador_avancado: 'Operador Avançado', motorista: 'Motorista' };
 
@@ -12,7 +13,10 @@ export function montarCabecalho(paginaAtiva) {
 
   const sessao = obterSessao();
   const papel = sessao?.usuario?.role || 'motorista';
-  const ehGerente = papel === 'admin' || papel === 'operador_avancado';
+  // Só admin (Operador Avançado passou a só lançar a própria viagem, sem
+  // acesso a Cadastros/Relatórios/Dashboard — só a tela de Viagens fica
+  // ativa pra ele, igual um motorista comum).
+  const ehGerente = papel === 'admin';
 
   const links = [{ id: 'viagens', href: 'app.html', label: 'Viagens' }];
   if (ehGerente) {
@@ -24,12 +28,13 @@ export function montarCabecalho(paginaAtiva) {
   alvo.innerHTML = `
     <header class="app-header">
       <div>
-        <h1>LR Controle de Viagens</h1>
+        <img src="icons/logo.png" alt="LR Campos" class="logo-lr" />
         <div class="subtitulo">${sessao?.usuario?.nome || ''} · ${RÓTULO_PAPEL[papel] || 'Motorista'}</div>
         <div class="status-conexao" id="status-conexao">
           <span class="ponto"></span>
           <span id="status-conexao-texto">Online</span>
         </div>
+        <div class="status-sincronizacao" id="status-sincronizacao">Última sincronização: <span id="status-sincronizacao-texto">nunca</span></div>
       </div>
       <nav>
         ${links
@@ -61,6 +66,15 @@ export function montarCabecalho(paginaAtiva) {
   window.addEventListener('online', atualizarStatusConexao);
   window.addEventListener('offline', atualizarStatusConexao);
   atualizarStatusConexao();
+
+  // --- Indicador de "há quanto tempo sincronizou pela última vez" ---------
+  const statusSincTexto = document.getElementById('status-sincronizacao-texto');
+  function atualizarStatusSincronizacao() {
+    statusSincTexto.textContent = formatarTempoDecorrido(obterUltimaSincronizacao());
+  }
+  atualizarStatusSincronizacao();
+  setInterval(atualizarStatusSincronizacao, 30000);
+  aoSincronizar(atualizarStatusSincronizacao);
 
   // --- Contador de pendentes + botão de sincronizar agora ------------------
   const btnSincronizar = document.getElementById('btn-sincronizar-agora');

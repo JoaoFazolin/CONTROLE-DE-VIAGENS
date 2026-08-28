@@ -2,7 +2,7 @@
 // abrir mesmo sem internet. As chamadas de API (/api/*) NUNCA são
 // respondidas pelo cache — precisam ir sempre pro servidor (ou falhar, e aí
 // quem trata isso é a fila de pendentes no frontend, não o service worker).
-const VERSAO_CACHE = 'lrcv-shell-v2';
+const VERSAO_CACHE = 'lrcv-shell-v6';
 
 const ARQUIVOS_SHELL = [
   '/',
@@ -17,7 +17,9 @@ const ARQUIVOS_SHELL = [
   '/src/auth.js',
   '/src/cadastrosCache.js',
   '/src/combobox.js',
+  '/src/botoesDestino.js',
   '/src/fila.js',
+  '/src/statusSincronizacao.js',
   '/src/login.js',
   '/src/viagens.js',
   '/src/cadastrosAdmin.js',
@@ -26,6 +28,8 @@ const ARQUIVOS_SHELL = [
   '/layout/cabecalho.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/favicon.png',
+  '/icons/logo.png',
 ];
 
 self.addEventListener('install', (evento) => {

@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0b2545" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="icons/favicon.png" />
   <link rel="stylesheet" href="styles/theme.css" />
 </head>
 <body>
@@ -33,16 +34,16 @@
         </div>
 
         <div id="campo-caminhao"></div>
+        <div id="aviso-sem-caminhao-vinculado" class="aviso aviso-pendente" style="display:none;">
+          Você ainda não tem um caminhão vinculado ao seu usuário — escolha abaixo. Fale com o administrador pra deixar isso automático.
+        </div>
         <div id="campo-escavadeira"></div>
         <div id="campo-local"></div>
         <div id="campo-destino"></div>
         <div id="campo-motorista"></div>
 
         <label for="campo-total-viagens">Total de viagens nesse trajeto</label>
-        <input type="number" id="campo-total-viagens" min="1" value="1" required inputmode="numeric" />
-
-        <label for="campo-diesel">Diesel (litros) — opcional</label>
-        <input type="number" id="campo-diesel" min="0" step="0.1" inputmode="decimal" />
+        <input type="text" id="campo-total-viagens" value="1" required inputmode="numeric" pattern="[0-9]*" />
 
         <div class="linha-botoes">
           <button type="button" class="btn btn-secundario" id="btn-cancelar-edicao" style="display:none;">Cancelar edição</button>
@@ -62,11 +63,8 @@
           <div class="valor" id="resumo-motoristas">0</div>
           <div class="rotulo">Motoristas distintos</div>
         </div>
-        <div>
-          <div class="valor" id="resumo-diesel">0</div>
-          <div class="rotulo">Diesel (L)</div>
-        </div>
       </div>
+      <div class="resumo-ultima-viagem" id="resumo-ultima-viagem" style="display:none;"></div>
     </section>
 
     <section class="cartao">
@@ -94,6 +92,7 @@
           <thead>
             <tr>
               <th>Data</th>
+              <th>Horário</th>
               <th>Ordem</th>
               <th>Caminhão</th>
               <th>Destino</th>
