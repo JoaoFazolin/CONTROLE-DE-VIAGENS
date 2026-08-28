@@ -4,6 +4,7 @@
 import { obterSessao, sair } from '../src/auth.js';
 import { obterPendentes, aoMudarFila, tentarSincronizarFila } from '../src/fila.js';
 import { obterUltimaSincronizacao, formatarTempoDecorrido, aoSincronizar } from '../src/statusSincronizacao.js';
+import { atualizarAppCompleto } from '../src/atualizarApp.js';
 
 const RÓTULO_PAPEL = { admin: 'Administrador', operador_avancado: 'Operador Avançado', motorista: 'Motorista' };
 
@@ -17,6 +18,10 @@ export function montarCabecalho(paginaAtiva) {
   // acesso a Cadastros/Relatórios/Dashboard — só a tela de Viagens fica
   // ativa pra ele, igual um motorista comum).
   const ehGerente = papel === 'admin';
+  // Botão de atualizar dados: só quem realmente usa o sistema pra trabalhar
+  // (Admin e Operador Avançado) — motorista raramente loga, e quando loga
+  // só vê a própria viagem, sem necessidade desse atalho.
+  const podeAtualizarDados = papel === 'admin' || papel === 'operador_avancado';
 
   const links = [{ id: 'viagens', href: 'app.html', label: 'Viagens' }];
   if (ehGerente) {
@@ -40,7 +45,11 @@ export function montarCabecalho(paginaAtiva) {
         ${links
           .map(
             (l) =>
-              `<a href="${l.href}" class="${l.id === paginaAtiva ? 'ativo' : ''}">${l.label}</a>`
+              `<a href="${l.href}" class="${l.id === paginaAtiva ? 'ativo' : ''}">${l.label}</a>${
+                l.id === 'viagens' && podeAtualizarDados
+                  ? `<button type="button" id="btn-atualizar-dados" class="btn-atualizar-app" title="Buscar a versão mais recente do app (use se algo parecer desatualizado)">⟳ Atualizar app</button>`
+                  : ''
+              }`
           )
           .join('')}
         <button type="button" id="btn-sincronizar-agora" style="display:none;"><span id="lbl-sincronizar">Sincronizar</span> (<span id="qtd-pendentes">0</span>)</button>
@@ -87,11 +96,46 @@ export function montarCabecalho(paginaAtiva) {
   btnSincronizar.addEventListener('click', async () => {
     btnSincronizar.disabled = true;
     lblSincronizar.textContent = 'Sincronizando…';
-    await tentarSincronizarFila();
+    // forcar:true — toque manual ignora o limite de tentativas automáticas
+    // (ver fila.js), então um item "travado" há muito tempo tenta de novo.
+    await tentarSincronizarFila({ forcar: true });
     btnSincronizar.disabled = false;
     lblSincronizar.textContent = 'Sincronizar';
   });
   // estado inicial (a página específica também chama iniciarSincronizacaoAutomatica())
   qtdPendentesEl.textContent = obterPendentes().length;
   btnSincronizar.style.display = obterPendentes().length > 0 ? '' : 'none';
+
+  // --- Botão "Atualizar app" (Admin/Operador) — força buscar a versão nova -
+  // Desregistra o service worker + apaga o cache do "shell" e recarrega a
+  // página, garantindo que o app pegue qualquer alteração publicada (em vez
+  // de continuar mostrando uma versão antiga guardada em cache). Só funciona
+  // com internet — se estiver offline, cancela pra não deixar o app "sem
+  // shell" até a conexão voltar.
+  const btnAtualizar = document.getElementById('btn-atualizar-dados');
+  if (btnAtualizar) {
+    btnAtualizar.addEventListener('click', async () => {
+      if (!navigator.onLine) {
+        alert('Sem conexão com a internet no momento. Conecte-se e tente de novo — atualizar o app offline deixaria ele sem funcionar até a internet voltar.');
+        return;
+      }
+      const confirmou = confirm(
+        'Isso vai recarregar o app pra buscar a versão mais recente publicada.\n\n' +
+        'Se você estiver preenchendo um cadastro (caminhão, escavadeira, local, destino ou usuário), esse formulário será perdido — salve antes de continuar.\n' +
+        '(Rascunhos de "Nova viagem" ficam salvos automaticamente e não são perdidos.)\n\n' +
+        'Continuar?'
+      );
+      if (!confirmou) return;
+      // Reconfirma a conexão AQUI: o confirm() acima é uma caixa bloqueante
+      // e a pessoa pode demorar pra responder — se a conexão caiu enquanto
+      // a caixa estava aberta, a checagem lá em cima já não vale mais.
+      if (!navigator.onLine) {
+        alert('A conexão com a internet caiu enquanto a confirmação estava aberta. Tente de novo quando estiver online.');
+        return;
+      }
+      btnAtualizar.disabled = true;
+      btnAtualizar.textContent = '⟳ Atualizando app…';
+      await atualizarAppCompleto();
+    });
+  }
 }

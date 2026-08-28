@@ -1,6 +1,7 @@
 import { exigirLogin, obterSessao } from './auth.js';
 import { montarCabecalho } from '../layout/cabecalho.js';
 import { chamarApi, ErroApi } from './api.js';
+import { escaparHtml } from './util.js';
 
 if (!exigirLogin()) throw new Error('redirecionando para login');
 
@@ -37,14 +38,15 @@ function renderizarGrafico(containerId, itens, formatarRotulo) {
   const maximo = Math.max(...itens.map((i) => i.valor), 1);
   container.innerHTML = itens
     .slice(0, 15)
-    .map(
-      (i) => `
+    .map((i) => {
+      const rotulo = escaparHtml(formatarRotulo(i.chave));
+      return `
       <div class="grafico-linha">
-        <div class="grafico-rotulo" title="${formatarRotulo(i.chave)}">${formatarRotulo(i.chave)}</div>
+        <div class="grafico-rotulo" title="${rotulo}">${rotulo}</div>
         <div class="grafico-trilha"><div class="grafico-barra" style="width:${Math.max((i.valor / maximo) * 100, 4)}%"></div></div>
         <div class="grafico-valor">${i.valor}</div>
-      </div>`
-    )
+      </div>`;
+    })
     .join('');
 }
 
@@ -67,9 +69,12 @@ function renderizarAnomalias(anomalias) {
       const [ano, mes, dia] = a.data.split('-');
       const dataCurta = `${dia}/${mes}/${ano}`;
       const qtd = a.viagens === 1 ? '1 viagem' : `${a.viagens} viagens`;
+      const caminhao = escaparHtml(a.caminhao);
+      const motorista = escaparHtml(a.motorista);
+      const motoristaVinculado = escaparHtml(a.motorista_vinculado);
       return `
         <div class="anomalia-linha">
-          <strong>${a.caminhao}</strong> — ${a.motorista} dirigiu (vinculado é ${a.motorista_vinculado}) em ${dataCurta} (${qtd})
+          <strong>${caminhao}</strong> — ${motorista} dirigiu (vinculado é ${motoristaVinculado}) em ${dataCurta} (${qtd})
         </div>`;
     })
     .join('');
@@ -97,6 +102,7 @@ campoFim.addEventListener('change', carregarDashboard);
 
 carregarDashboard();
 
+// --- Botão "Atualizar" do cabeçalho ---------------------------------------
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }

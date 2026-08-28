@@ -42,10 +42,44 @@ exports.handler = comTratamentoDeErro(async function (event) {
     if (!body || !body.nome || !String(body.nome).trim()) {
       return json(400, { erro: 'Informe o nome do motorista.' });
     }
+    const nome = String(body.nome).trim();
+
+    // Diferente de caminhão/escavadeira/local/destino, profiles.nome NÃO é
+    // unique no banco (dois motoristas de verdade podem ter o mesmo nome) —
+    // então recriar um motorista com o mesmo nome de um que foi desativado
+    // não dava erro nenhum, mas criava uma pessoa "nova" sem nenhum vínculo
+    // com o histórico de viagens da antiga. Se existe exatamente UM
+    // motorista inativo com esse nome (comparando sem diferenciar maiúsculas/
+    // minúsculas nem espaços nas pontas — comparação exata no banco deixava
+    // passar batido o caso mais comum de digitar "joão silva" na segunda vez
+    // em vez de "João Silva", caindo direto no bug que essa checagem devia
+    // evitar), reativa ele em vez de criar um segundo registro (se houver
+    // mais de um, a escolha seria ambígua — melhor cadastrar como novo mesmo
+    // do que reativar o motorista errado).
+    const { data: inativos, error: erroBusca } = await supabase
+      .from('profiles')
+      .select('id, nome')
+      .eq('role', 'motorista')
+      .eq('ativo', false);
+    if (erroBusca) return json(500, { erro: 'Erro ao cadastrar motorista.', detalhe: erroBusca.message });
+
+    const normalizar = (texto) => String(texto || '').trim().toLowerCase();
+    const candidatosInativos = (inativos || []).filter((p) => normalizar(p.nome) === normalizar(nome));
+
+    if (candidatosInativos && candidatosInativos.length === 1) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ nome, ativo: true })
+        .eq('id', candidatosInativos[0].id)
+        .select()
+        .single();
+      if (error) return json(500, { erro: 'Erro ao reativar motorista.', detalhe: error.message });
+      return json(201, { item: data });
+    }
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .insert({ nome: String(body.nome).trim(), role: 'motorista', ativo: true })
+      .insert({ nome, role: 'motorista', ativo: true })
       .select()
       .single();
 
@@ -77,6 +111,13 @@ exports.handler = comTratamentoDeErro(async function (event) {
 
     const { error } = await supabase.from('profiles').update({ ativo: false }).eq('id', id).eq('role', 'motorista');
     if (error) return json(500, { erro: 'Erro ao desativar.', detalhe: error.message });
+
+    // Mesma correção aplicada em caminhões: sem isso, o vínculo motorista→
+    // caminhão ficava preso apontando pra um motorista escondido/inativo, e
+    // como caminhoes.motorista_id é unique, esse caminhão nunca mais podia
+    // ser vinculado a outro motorista sem mexer direto no banco.
+    await supabase.from('caminhoes').update({ motorista_id: null }).eq('motorista_id', id);
+
     return json(200, { ok: true });
   }
 

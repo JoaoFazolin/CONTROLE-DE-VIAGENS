@@ -85,6 +85,8 @@ alter table public.viagens enable row level security;
 
 create index if not exists idx_viagens_data on public.viagens (data);
 create index if not exists idx_viagens_motorista on public.viagens (motorista_id);
+create index if not exists idx_viagens_caminhao on public.viagens (caminhao_id);
+create index if not exists idx_viagens_destino on public.viagens (destino_id);
 
 -- ----------------------------------------------------------------------------
 -- Sequência de "Ordem" travada com pg_advisory_xact_lock
@@ -114,6 +116,15 @@ declare
   v_ordem   integer;
   v_row     public.viagens;
 begin
+  -- Trava exclusiva para este dia ANTES de checar duplicidade (não depois):
+  -- se duas chamadas com o mesmo client_uuid chegam quase juntas (reenvio
+  -- da fila offline por uma resposta que se perdeu na rede, por exemplo),
+  -- travar só DEPOIS da checagem deixava as duas passarem pelo "ainda não
+  -- existe" antes de qualquer uma inserir — a segunda então batia na unique
+  -- constraint de client_uuid e devolvia erro em vez de, como devia,
+  -- simplesmente devolver o registro que a primeira já tinha gravado.
+  perform pg_advisory_xact_lock(hashtext(p_data::text));
+
   -- Se esse client_uuid já foi gravado antes (reenvio da fila offline),
   -- devolve o registro existente em vez de duplicar.
   select * into v_row from public.viagens where client_uuid = p_client_uuid;
@@ -121,10 +132,26 @@ begin
     return v_row;
   end if;
 
-  -- Trava exclusiva para este dia até o fim da transação: garante que o
-  -- cálculo "próximo número" + insert acontece de forma atômica mesmo com
-  -- requisições concorrentes.
-  perform pg_advisory_xact_lock(hashtext(p_data::text));
+  -- Garante que os cadastros referenciados ainda estão ATIVOS — sem isso,
+  -- uma viagem que ficou esperando na fila offline do aparelho podia ser
+  -- gravada contra um caminhão/destino/motorista desativado enquanto ela
+  -- esperava conexão, corrompendo silenciosamente relatórios com um
+  -- cadastro "fantasma". Os dois opcionais só são checados se informados.
+  if not exists (select 1 from public.caminhoes where id = p_caminhao_id and ativo) then
+    raise exception 'caminhao_inativo';
+  end if;
+  if not exists (select 1 from public.destinos where id = p_destino_id and ativo) then
+    raise exception 'destino_inativo';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_motorista_id and ativo) then
+    raise exception 'motorista_inativo';
+  end if;
+  if p_escavadeira_id is not null and not exists (select 1 from public.escavadeiras where id = p_escavadeira_id and ativo) then
+    raise exception 'escavadeira_inativa';
+  end if;
+  if p_local_carga_id is not null and not exists (select 1 from public.locais_carga where id = p_local_carga_id and ativo) then
+    raise exception 'local_carga_inativo';
+  end if;
 
   select coalesce(max(ordem), 0) + 1 into v_ordem
   from public.viagens
@@ -147,6 +174,75 @@ $$;
 -- a função SECURITY DEFINER é o único caminho de escrita usado pelo backend).
 revoke all on function public.criar_viagem from public;
 grant execute on function public.criar_viagem to service_role;
+
+-- ----------------------------------------------------------------------------
+-- Alterar papel/status de um admin, com proteção atômica contra corrida
+-- Mesmo motivo do lock em criar_viagem: sem isso, checar "ainda sobra outro
+-- admin ativo?" e DEPOIS atualizar são duas chamadas separadas — com
+-- exatamente 2 admins ativos, dois rebaixamentos/desativações quase
+-- simultâneos (um mexendo no outro) podiam os dois passar pela checagem
+-- antes de qualquer atualização terminar, deixando o sistema sem admin
+-- nenhum. Aqui a checagem + a escrita rodam na mesma transação, travada.
+-- ----------------------------------------------------------------------------
+create or replace function public.usuarios_atualizar_com_protecao(
+  p_id            uuid,
+  p_id_quem_pediu uuid,
+  p_nome          text default null,
+  p_role          text default null,
+  p_ativo         boolean default null
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_atual                 public.profiles;
+  v_role_final             text;
+  v_ativo_final             boolean;
+  v_outros_admins_ativos    integer;
+  v_row                     public.profiles;
+begin
+  perform pg_advisory_xact_lock(hashtext('lrcv_admins'));
+
+  select * into v_atual from public.profiles where id = p_id;
+  -- Só mexe em admin/operador_avancado por aqui — mesma restrição que já
+  -- existia no filtro .in('role', PAPEIS_VALIDOS) do endpoint (motorista se
+  -- gerencia em /api/motoristas, não aqui).
+  if not found or v_atual.role not in ('admin', 'operador_avancado') then
+    raise exception 'usuario_nao_encontrado';
+  end if;
+
+  v_role_final := coalesce(p_role, v_atual.role);
+  v_ativo_final := coalesce(p_ativo, v_atual.ativo);
+
+  if v_atual.role = 'admin' and v_atual.ativo and (v_role_final <> 'admin' or v_ativo_final = false) then
+    if p_id = p_id_quem_pediu then
+      raise exception 'nao_pode_remover_proprio_admin';
+    end if;
+
+    select count(*) into v_outros_admins_ativos
+    from public.profiles
+    where role = 'admin' and ativo = true and id <> p_id;
+
+    if v_outros_admins_ativos = 0 then
+      raise exception 'ultimo_admin';
+    end if;
+  end if;
+
+  update public.profiles
+  set nome  = coalesce(p_nome, nome),
+      role  = v_role_final,
+      ativo = v_ativo_final
+  where id = p_id
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+revoke all on function public.usuarios_atualizar_com_protecao from public;
+grant execute on function public.usuarios_atualizar_com_protecao to service_role;
 
 -- ----------------------------------------------------------------------------
 -- Seed inicial opcional — descomente e ajuste para popular os cadastros que

@@ -92,6 +92,7 @@ async function montarFiltros() {
 }
 montarFiltros();
 
+// --- Botão "Atualizar" do cabeçalho ---------------------------------------
 async function exportarRelatorio({ endpoint, extensao, botao, textoOriginal, textoGerando }) {
   avisoErro.style.display = 'none';
 

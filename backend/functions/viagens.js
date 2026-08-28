@@ -4,6 +4,35 @@ const { json, noContentPreflight, safeJsonParse, comTratamentoDeErro } = require
 
 const TAMANHO_PAGINA = 50;
 
+// "Desativar" um cadastro só tira ele da tela — o id continua existindo e
+// válido pra chave estrangeira. Como o app funciona offline (cadastros em
+// cache no aparelho, viagens não enviadas ficam esperando na fila local),
+// sem checar isso dava pra gravar uma viagem contra um caminhão/destino/
+// motorista que foi desativado ENQUANTO ela esperava conexão. criar_viagem()
+// (migration_007) já recusa isso na criação; essas mensagens traduzem o que
+// a function recusa, e o mesmo é checado manualmente aqui no PUT (correção
+// manual do admin, que não passa pela function).
+const MENSAGENS_ERRO_CADASTRO_INATIVO = {
+  caminhao_inativo: 'O caminhão selecionado está desativado. Escolha outro.',
+  destino_inativo: 'O destino selecionado está desativado. Escolha outro.',
+  motorista_inativo: 'O motorista selecionado está desativado. Escolha outro.',
+  escavadeira_inativa: 'A escavadeira selecionada está desativada. Escolha outra ou deixe em branco.',
+  local_carga_inativo: 'O local de carga/corte selecionado está desativado. Escolha outro ou deixe em branco.',
+};
+function respostaErroViagem(error) {
+  const chave = Object.keys(MENSAGENS_ERRO_CADASTRO_INATIVO).find((k) => error?.message?.includes(k));
+  if (chave) return json(400, { erro: MENSAGENS_ERRO_CADASTRO_INATIVO[chave] });
+  return json(500, { erro: 'Erro ao gravar viagem.', detalhe: error?.message });
+}
+
+const TABELA_POR_CAMPO_VIAGEM = {
+  caminhao_id: { tabela: 'caminhoes', mensagem: MENSAGENS_ERRO_CADASTRO_INATIVO.caminhao_inativo },
+  destino_id: { tabela: 'destinos', mensagem: MENSAGENS_ERRO_CADASTRO_INATIVO.destino_inativo },
+  motorista_id: { tabela: 'profiles', mensagem: MENSAGENS_ERRO_CADASTRO_INATIVO.motorista_inativo },
+  escavadeira_id: { tabela: 'escavadeiras', mensagem: MENSAGENS_ERRO_CADASTRO_INATIVO.escavadeira_inativa },
+  local_carga_id: { tabela: 'locais_carga', mensagem: MENSAGENS_ERRO_CADASTRO_INATIVO.local_carga_inativo },
+};
+
 // /api/viagens
 // GET  ?data=YYYY-MM-DD           -> lista as viagens daquele dia
 // GET  ?inicio=...&fim=...        -> lista as viagens de um período (histórico/relatório),
@@ -105,6 +134,13 @@ exports.handler = comTratamentoDeErro(async function (event) {
         erro: 'Campos obrigatórios ausentes (caminhão, destino, motorista, data e hora do registro).',
       });
     }
+    // A coluna já tem "check (total_viagens > 0)" no banco, mas validar
+    // aqui devolve uma mensagem legível em vez do 500 genérico que vinha da
+    // violação de constraint quando alguém mandava 0 (ex: campo numérico
+    // deixado em branco e convertido errado no cliente).
+    if (total_viagens !== undefined && total_viagens !== null && !(Number(total_viagens) > 0)) {
+      return json(400, { erro: 'Total de viagens precisa ser maior que zero.' });
+    }
 
     // Só quem tem o cargo "motorista" (login raro, na prática o motorista
     // nunca abre o app) fica travado a lançar em nome dele mesmo. O
@@ -129,7 +165,7 @@ exports.handler = comTratamentoDeErro(async function (event) {
       p_criado_por: auth.user.id,
     });
 
-    if (error) return json(500, { erro: 'Erro ao gravar viagem.', detalhe: error.message });
+    if (error) return respostaErroViagem(error);
     return json(201, { item: row });
   }
 
@@ -141,6 +177,7 @@ exports.handler = comTratamentoDeErro(async function (event) {
     if (!id) return json(400, { erro: 'Informe o id da viagem.' });
 
     const campos = [
+      'data', // corrige o dia da viagem (ex: motorista lançou com o aparelho na data errada)
       'caminhao_id',
       'escavadeira_id',
       'local_carga_id',
@@ -156,6 +193,17 @@ exports.handler = comTratamentoDeErro(async function (event) {
     }
     if (Object.keys(payload).length === 0) {
       return json(400, { erro: 'Nada para atualizar.' });
+    }
+    if (payload.total_viagens !== undefined && !(Number(payload.total_viagens) > 0)) {
+      return json(400, { erro: 'Total de viagens precisa ser maior que zero.' });
+    }
+
+    for (const [campo, { tabela, mensagem }] of Object.entries(TABELA_POR_CAMPO_VIAGEM)) {
+      if (payload[campo]) {
+        const { data: linhaRef, error: erroRef } = await supabase.from(tabela).select('ativo').eq('id', payload[campo]).maybeSingle();
+        if (erroRef) return json(500, { erro: 'Erro ao validar cadastro.', detalhe: erroRef.message });
+        if (!linhaRef || !linhaRef.ativo) return json(400, { erro: mensagem });
+      }
     }
 
     const { data, error } = await supabase.from('viagens').update(payload).eq('id', id).select().single();

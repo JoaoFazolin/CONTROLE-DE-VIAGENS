@@ -126,6 +126,23 @@ html, body {
   background: rgba(255, 255, 255, 0.28);
 }
 
+/* Botão "Atualizar app" — proposital chamativo (cor de ação laranja), pra se
+   destacar dos outros botões translúcidos do menu e deixar claro que é uma
+   ação diferente (força buscar a versão nova do app publicada). */
+.app-header nav button.btn-atualizar-app {
+  background: var(--cor-acao);
+  color: var(--cor-acao-texto);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+}
+.app-header nav button.btn-atualizar-app:hover {
+  background: var(--cor-acao-escura);
+}
+.app-header nav button.btn-atualizar-app:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+
 main {
   max-width: 720px;
   margin: 0 auto;
@@ -240,6 +257,7 @@ textarea:focus {
 .aviso-pendente { background: var(--cor-pendente-fundo); color: var(--cor-pendente); }
 .aviso-sucesso { background: #e9f7ef; color: var(--cor-sucesso); }
 .aviso-atencao { background: #fff4e5; color: #7a4a00; }
+.aviso #btn-descartar-rascunho { margin-top: 8px; }
 
 .resumo-dia {
   display: grid;

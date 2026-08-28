@@ -12,6 +12,29 @@ function normalizarPapel(role) {
   return PAPEIS_VALIDOS.includes(role) ? role : 'operador_avancado';
 }
 
+// Rebaixar (tirar do papel admin) ou desativar alguém passa pela function
+// usuarios_atualizar_com_protecao (migration_006) em vez de um update direto
+// na tabela: ela roda a checagem de "sobra outro admin?" e a escrita dentro
+// da MESMA transação, travada com pg_advisory_xact_lock — sem isso, checar
+// e escrever em duas chamadas separadas deixava uma corrida rara possível
+// (dois admins sendo rebaixados/desativados ao mesmo tempo, um pelo outro,
+// cada checagem vendo "o outro ainda tá ativo" antes de qualquer escrita
+// terminar — o sistema ficava sem NENHUM admin ativo). A function também
+// bloqueia sozinha a autoexclusão (idAlvo === idQuemPediu).
+const MENSAGENS_ERRO_RPC_USUARIO = {
+  usuario_nao_encontrado: { statusCode: 404, mensagem: 'Usuário não encontrado (ou é um motorista — edite em Motoristas).' },
+  nao_pode_remover_proprio_admin: {
+    statusCode: 400,
+    mensagem: 'Você não pode remover seu próprio acesso de administrador nem desativar sua própria conta por aqui — peça para outro administrador fazer essa alteração.',
+  },
+  ultimo_admin: { statusCode: 400, mensagem: 'Não é possível remover o último administrador ativo do sistema.' },
+};
+function respostaErroRpcUsuario(error) {
+  const chave = Object.keys(MENSAGENS_ERRO_RPC_USUARIO).find((k) => error?.message?.includes(k));
+  if (chave) return json(MENSAGENS_ERRO_RPC_USUARIO[chave].statusCode, { erro: MENSAGENS_ERRO_RPC_USUARIO[chave].mensagem });
+  return json(500, { erro: 'Erro ao atualizar usuário.', detalhe: error?.message });
+}
+
 exports.handler = comTratamentoDeErro(async function (event) {
   if (event.httpMethod === 'OPTIONS') return noContentPreflight();
   const supabase = getSupabaseAdmin();
@@ -44,14 +67,49 @@ exports.handler = comTratamentoDeErro(async function (event) {
       return json(400, { erro: 'A senha precisa ter pelo menos 6 caracteres.' });
     }
     const papel = normalizarPapel(role);
+    const emailNormalizado = String(email).trim().toLowerCase();
 
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
-      email: String(email).trim().toLowerCase(),
+      email: emailNormalizado,
       password: senha,
       email_confirm: true,
     });
+
     if (createError || !created?.user) {
-      return json(400, { erro: createError?.message || 'Não foi possível criar o login.' });
+      // "Excluir" um usuário só desativa o perfil (nunca apaga o login do
+      // Supabase Auth — senão perderia o vínculo com viagens que ele já
+      // lançou). Isso significa que recriar com o MESMO e-mail esbarra num
+      // login que já existe (createUser recusa e-mail duplicado). Em vez de
+      // travar, procura esse login existente e reativa (ou recupera) o
+      // perfil dele, com o nome/papel/senha novos.
+      const { data: listagem, error: erroListagem } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const usuarioExistente = erroListagem ? null : listagem?.users?.find((u) => u.email?.toLowerCase() === emailNormalizado);
+
+      if (!usuarioExistente) {
+        return json(400, { erro: createError?.message || 'Não foi possível criar o login.' });
+      }
+
+      const { data: perfilExistente } = await supabase
+        .from('profiles')
+        .select('id, ativo')
+        .eq('id', usuarioExistente.id)
+        .maybeSingle();
+
+      if (perfilExistente?.ativo) {
+        return json(409, { erro: 'Já existe um usuário ativo com esse e-mail.' });
+      }
+
+      // Atualiza a senha também — o e-mail pode estar sendo reaproveitado
+      // por outra pessoa, não faz sentido a senha antiga continuar valendo.
+      await supabase.auth.admin.updateUserById(usuarioExistente.id, { password: senha });
+
+      const dadosPerfil = { nome: nome.trim(), role: papel, ativo: true };
+      const { data: perfilSalvo, error: erroSalvar } = perfilExistente
+        ? await supabase.from('profiles').update(dadosPerfil).eq('id', usuarioExistente.id).select().single()
+        : await supabase.from('profiles').insert({ id: usuarioExistente.id, ...dadosPerfil }).select().single();
+
+      if (erroSalvar) return json(500, { erro: 'Erro ao reativar usuário.', detalhe: erroSalvar.message });
+      return json(201, { item: perfilSalvo });
     }
 
     const { data: profile, error: profileError } = await supabase
@@ -74,14 +132,13 @@ exports.handler = comTratamentoDeErro(async function (event) {
     const id = body?.id;
     if (!id) return json(400, { erro: 'Informe o id do usuário.' });
 
-    const payload = {};
-    if (body.nome !== undefined) payload.nome = String(body.nome).trim();
-    if (body.role !== undefined) payload.role = normalizarPapel(body.role);
-    if (body.ativo !== undefined) payload.ativo = !!body.ativo;
+    const rpcArgs = { p_id: id, p_id_quem_pediu: auth.user.id };
+    if (body.nome !== undefined) rpcArgs.p_nome = String(body.nome).trim();
+    if (body.role !== undefined) rpcArgs.p_role = normalizarPapel(body.role);
+    if (body.ativo !== undefined) rpcArgs.p_ativo = !!body.ativo;
 
-    const { data, error } = await supabase.from('profiles').update(payload).eq('id', id).in('role', PAPEIS_VALIDOS).select().single();
-    if (error) return json(500, { erro: 'Erro ao atualizar.', detalhe: error.message });
-    if (!data) return json(404, { erro: 'Usuário não encontrado (ou é um motorista — edite em Motoristas).' });
+    const { data, error } = await supabase.rpc('usuarios_atualizar_com_protecao', rpcArgs).single();
+    if (error) return respostaErroRpcUsuario(error);
     return json(200, { item: data });
   }
 
@@ -89,8 +146,10 @@ exports.handler = comTratamentoDeErro(async function (event) {
     const id = event.queryStringParameters?.id;
     if (!id) return json(400, { erro: 'Informe o id do usuário.' });
 
-    const { error } = await supabase.from('profiles').update({ ativo: false }).eq('id', id).in('role', PAPEIS_VALIDOS);
-    if (error) return json(500, { erro: 'Erro ao desativar.', detalhe: error.message });
+    const { error } = await supabase
+      .rpc('usuarios_atualizar_com_protecao', { p_id: id, p_id_quem_pediu: auth.user.id, p_ativo: false })
+      .single();
+    if (error) return respostaErroRpcUsuario(error);
     return json(200, { ok: true });
   }
 

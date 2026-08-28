@@ -12,6 +12,15 @@
 //   campo.definirValor(id)  -> seleciona programaticamente
 //   campo.definirOpcoes([]) -> atualiza a lista (ex: quando o cache recarrega)
 
+// o.texto vem de cadastros (código de caminhão, nome de motorista,
+// descrição de destino etc) — texto livre digitado por um admin, sem
+// restrição de caractere nenhuma. Sem escapar antes de colocar em
+// innerHTML, um cadastro com HTML no texto (ex: "<img src=x onerror=...>")
+// executaria pra qualquer pessoa que abrisse esse combobox — e como TODO
+// combobox do sistema usa essa mesma função, era o ponto central de um
+// stored XSS.
+import { escaparHtml } from './util.js';
+
 export function criarCombobox({
   container,
   rotulo,
@@ -48,7 +57,7 @@ export function criarCombobox({
       lista.innerHTML = filtradas
         .map(
           (o, i) =>
-            `<div class="combobox-opcao ${i === indiceDestacado ? 'destacada' : ''}" data-id="${o.id}">${o.texto}</div>`
+            `<div class="combobox-opcao ${i === indiceDestacado ? 'destacada' : ''}" data-id="${o.id}">${escaparHtml(o.texto)}</div>`
         )
         .join('');
     }
@@ -127,6 +136,14 @@ export function criarCombobox({
     },
     definirOpcoes(novasOpcoes) {
       listaOpcoes = novasOpcoes;
+      // Se o que estava selecionado não existe mais na lista nova (ex: o
+      // caminhão foi desativado nos cadastros enquanto o formulário estava
+      // aberto), limpa a seleção — sem isso, o campo continuava mostrando e
+      // enviando um id que já não é uma opção válida, sem avisar ninguém.
+      if (valorSelecionadoId !== null && !novasOpcoes.some((o) => String(o.id) === String(valorSelecionadoId))) {
+        valorSelecionadoId = null;
+        input.value = '';
+      }
     },
   };
 }

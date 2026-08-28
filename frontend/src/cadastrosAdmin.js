@@ -267,12 +267,16 @@ async function carregarSimples({ caminho, campo, campoRotulo, listaId }) {
   }
 }
 
+const recursosSimplesParaAtualizar = [];
+
 document.querySelectorAll('.form-cadastro').forEach((form) => {
   const recurso = form.dataset.recurso;
   const campo = form.dataset.campo;
   const caminho = `/api/${recurso}`;
   const listaId = `lista-${recurso}`;
   const campoRotulo = form.querySelector('label').textContent;
+  const params = { caminho, campo, campoRotulo, listaId };
+  recursosSimplesParaAtualizar.push(params);
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -281,13 +285,13 @@ document.querySelectorAll('.form-cadastro').forEach((form) => {
     try {
       await chamarApi(caminho, { metodo: 'POST', corpo: { [campo]: valor } });
       form.reset();
-      carregarSimples({ caminho, campo, campoRotulo, listaId });
+      carregarSimples(params);
     } catch (erro) {
       mostrarErro(erro);
     }
   });
 
-  carregarSimples({ caminho, campo, campoRotulo, listaId });
+  carregarSimples(params);
 });
 
 // --- Destinos (código + descrição) -----------------------------------------

@@ -11,6 +11,16 @@
 [functions]
   node_bundler = "esbuild"
 
+# O pdfkit (usado no /api/relatorio-pdf) carrega as métricas das fontes
+# padrão (Helvetica, Helvetica-Bold etc.) de arquivos .afm dentro do próprio
+# pacote, lendo do disco em tempo de execução — não é algo importado via
+# require/import, então o esbuild não inclui esses arquivos no bundle da
+# function sozinho. Sem esta linha, gerar o PDF dá "Erro interno no
+# servidor" em produção (funciona local porque ali o node_modules inteiro
+# está no disco). Isso força a Netlify a empacotar esses arquivos junto.
+[functions."relatorio-pdf"]
+  included_files = ["backend/node_modules/pdfkit/js/data/**"]
+
 # O frontend chama /api/... — este redirect coringa encaminha tudo para as
 # Netlify Functions (nome da function = último pedaço da URL). Sem este
 # bloco, toda chamada /api/* cai em 404 e os seletores ficam vazios.

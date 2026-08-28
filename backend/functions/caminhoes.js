@@ -18,4 +18,9 @@ exports.handler = (event) =>
     mensagensDuplicidade: {
       motorista_id: 'Esse motorista já está vinculado a outro caminhão. Remova o vínculo antigo antes de vincular aqui.',
     },
+    // Desativar um caminhão libera o motorista que estava vinculado a ele —
+    // sem isso, o vínculo ficava preso num caminhão escondido (que não
+    // aparece mais em lugar nenhum) e esse motorista nunca mais podia ser
+    // vinculado a outro caminhão (motorista_id é unique).
+    limparAoDesativar: ['motorista_id'],
   });

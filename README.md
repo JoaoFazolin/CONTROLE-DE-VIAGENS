@@ -24,7 +24,10 @@ lr-controle-viagens/
 │   ├── migration_001_operador_avancado_e_edicao.sql # rodar depois do schema.sql
 │   ├── migration_002_vinculo_motorista_caminhao.sql # rodar depois da migration_001
 │   ├── migration_003_volume_caminhao.sql             # rodar depois da migration_002
-│   └── migration_004_motorista_sem_login.sql         # rodar depois da migration_003
+│   ├── migration_004_motorista_sem_login.sql         # rodar depois da migration_003
+│   ├── migration_005_correcoes_de_bugs.sql           # rodar depois da migration_004
+│   ├── migration_006_protecao_atomica_admin.sql      # rodar depois da migration_005
+│   └── migration_007_validar_cadastro_ativo_em_viagem.sql # rodar depois da migration_006
 ├── test-api.js       # diagnóstico rápido do backend (node test-api.js)
 └── netlify.toml       # config de build/rotas da Netlify (precisa ficar na raiz)
 ```
@@ -49,6 +52,14 @@ lr-controle-viagens/
    3. `supabase/migration_002_vinculo_motorista_caminhao.sql`
    4. `supabase/migration_003_volume_caminhao.sql`
    5. `supabase/migration_004_motorista_sem_login.sql`
+   6. `supabase/migration_005_correcoes_de_bugs.sql`
+   7. `supabase/migration_006_protecao_atomica_admin.sql`
+   8. `supabase/migration_007_validar_cadastro_ativo_em_viagem.sql`
+
+   (`schema.sql` já nasce com essas correções — rodar as migrações 005-007
+   num projeto novo é redundante mas inofensivo. O que importa de verdade é
+   rodá-las num projeto **já existente**, criado antes delas existirem —
+   sem isso, as correções mais recentes de bugs não valem pra esse banco.)
 3. Em **Project Settings → API**, anote as três coisas:
    - **Project URL**
    - **anon public key**
