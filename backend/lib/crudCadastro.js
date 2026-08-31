@@ -123,7 +123,14 @@ async function executarCrudCadastro(event, config) {
     if (!id) return json(400, { erro: 'Informe o id do registro.' });
 
     const payload = {};
-    if (body[campo] !== undefined) payload[campo] = String(body[campo]).trim();
+    if (body[campo] !== undefined) {
+      // Mesma exigência do POST (linha ~71): sem isso, um PUT com o campo
+      // principal em branco (ou só espaços) gravava string vazia — sem
+      // erro nenhum — corrompendo o cadastro silenciosamente.
+      const valorPrincipal = String(body[campo]).trim();
+      if (!valorPrincipal) return json(400, { erro: `Informe ${campoLabel}.` });
+      payload[campo] = valorPrincipal;
+    }
     if (body.ativo !== undefined) payload.ativo = !!body.ativo;
     for (const extra of extras) {
       if (body[extra] !== undefined) payload[extra] = body[extra];

@@ -96,10 +96,23 @@ exports.handler = comTratamentoDeErro(async function (event) {
     // Operador Avançado/Admin por aqui (ele não tem conta no Supabase Auth
     // pra logar); pra isso existe /api/usuarios.
     const payload = {};
-    if (body.nome !== undefined) payload.nome = String(body.nome).trim();
+    if (body.nome !== undefined) {
+      // Mesma exigência do POST (linha ~42): sem isso, um PUT com nome em
+      // branco (ou só espaços) gravava string vazia sem erro nenhum.
+      const nome = String(body.nome).trim();
+      if (!nome) return json(400, { erro: 'Informe o nome do motorista.' });
+      payload.nome = nome;
+    }
     if (body.ativo !== undefined) payload.ativo = !!body.ativo;
 
-    const { data, error } = await supabase.from('profiles').update(payload).eq('id', id).eq('role', 'motorista').select().single();
+    // .maybeSingle() (não .single()) — quando o id não existe ou não é um
+    // motorista, o .eq('role','motorista') faz o update casar 0 linhas.
+    // Com .single(), o PostgREST responde com ERRO nesse caso (não
+    // `data: null` sem erro), e esse erro caía direto no 500 genérico logo
+    // abaixo — nunca no 404 amigável que já existia (mas nunca era
+    // alcançado). Ex: PUT em /api/motoristas com o id de um admin/operador
+    // avançado devolvia "Erro ao atualizar" em vez da mensagem clara.
+    const { data, error } = await supabase.from('profiles').update(payload).eq('id', id).eq('role', 'motorista').select().maybeSingle();
     if (error) return json(500, { erro: 'Erro ao atualizar.', detalhe: error.message });
     if (!data) return json(404, { erro: 'Motorista não encontrado (ou não é um motorista — edite Operador/Admin em Usuários).' });
     return json(200, { item: data });
@@ -109,8 +122,15 @@ exports.handler = comTratamentoDeErro(async function (event) {
     const id = event.queryStringParameters?.id;
     if (!id) return json(400, { erro: 'Informe o id do motorista.' });
 
-    const { error } = await supabase.from('profiles').update({ ativo: false }).eq('id', id).eq('role', 'motorista');
+    // .select().maybeSingle() (em vez de update() sem retorno nenhum) —
+    // sem isso, um update que casa 0 linhas (id inexistente, ou é um
+    // admin/operador avançado, não um motorista) NÃO gera erro nenhum: a
+    // function respondia 200 { ok: true } como se tivesse desativado
+    // alguém, mesmo sem ter mudado nada — um admin podia achar que revogou
+    // o acesso de alguém e a pessoa continuava ativa.
+    const { data, error } = await supabase.from('profiles').update({ ativo: false }).eq('id', id).eq('role', 'motorista').select().maybeSingle();
     if (error) return json(500, { erro: 'Erro ao desativar.', detalhe: error.message });
+    if (!data) return json(404, { erro: 'Motorista não encontrado (ou não é um motorista — edite Operador/Admin em Usuários).' });
 
     // Mesma correção aplicada em caminhões: sem isso, o vínculo motorista→
     // caminhão ficava preso apontando pra um motorista escondido/inativo, e

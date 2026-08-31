@@ -8,8 +8,13 @@ const { json, noContentPreflight, safeJsonParse, comTratamentoDeErro } = require
 // Supabase Auth E o perfil (profiles) na mesma chamada, igual o antigo
 // /api/motoristas fazia antes da migration_004 separar os dois.
 const PAPEIS_VALIDOS = ['admin', 'operador_avancado'];
+// Antes, um `role` inválido/com erro de digitação (ex: "Admin" com
+// maiúscula) era silenciosamente trocado por 'operador_avancado' — a
+// chamada voltava 200/201 como se tivesse dado certo, e o admin só
+// descobria depois (ou nunca) que a promoção não tinha funcionado. Agora
+// devolve null pra quem chamou rejeitar com um erro claro.
 function normalizarPapel(role) {
-  return PAPEIS_VALIDOS.includes(role) ? role : 'operador_avancado';
+  return PAPEIS_VALIDOS.includes(role) ? role : null;
 }
 
 // Rebaixar (tirar do papel admin) ou desativar alguém passa pela function
@@ -67,6 +72,7 @@ exports.handler = comTratamentoDeErro(async function (event) {
       return json(400, { erro: 'A senha precisa ter pelo menos 6 caracteres.' });
     }
     const papel = normalizarPapel(role);
+    if (!papel) return json(400, { erro: `Papel inválido. Use: ${PAPEIS_VALIDOS.join(' ou ')}.` });
     const emailNormalizado = String(email).trim().toLowerCase();
 
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
@@ -133,8 +139,19 @@ exports.handler = comTratamentoDeErro(async function (event) {
     if (!id) return json(400, { erro: 'Informe o id do usuário.' });
 
     const rpcArgs = { p_id: id, p_id_quem_pediu: auth.user.id };
-    if (body.nome !== undefined) rpcArgs.p_nome = String(body.nome).trim();
-    if (body.role !== undefined) rpcArgs.p_role = normalizarPapel(body.role);
+    if (body.nome !== undefined) {
+      // Sem essa checagem, um PUT com nome em branco (ou só espaços)
+      // gravava string vazia sem erro: a RPC faz `coalesce(p_nome, nome)`,
+      // e uma string vazia não é NULL — o coalesce não protege contra isso.
+      const nome = String(body.nome).trim();
+      if (!nome) return json(400, { erro: 'Informe o nome do usuário.' });
+      rpcArgs.p_nome = nome;
+    }
+    if (body.role !== undefined) {
+      const papel = normalizarPapel(body.role);
+      if (!papel) return json(400, { erro: `Papel inválido. Use: ${PAPEIS_VALIDOS.join(' ou ')}.` });
+      rpcArgs.p_role = papel;
+    }
     if (body.ativo !== undefined) rpcArgs.p_ativo = !!body.ativo;
 
     const { data, error } = await supabase.rpc('usuarios_atualizar_com_protecao', rpcArgs).single();

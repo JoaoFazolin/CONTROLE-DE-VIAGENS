@@ -23,28 +23,6 @@ function formatarDataHoraBR(isoString) {
   });
 }
 
-// O Excel não guarda fuso horário — uma célula de hora é só um número "cru"
-// (fração do dia), sem timezone junto. Se a gente passar o Date de verdade
-// pro ExcelJS, ele serializa usando os componentes em UTC, então o Excel
-// mostraria a hora em UTC, não a hora de Brasília. Pra a célula aparecer
-// certinho como "13:30:45" (com o formato de hora do Excel, não texto),
-// construímos um Date "disfarçado": pegamos a hora de Brasília e criamos um
-// Date cujos componentes UTC são exatamente esses — assim o serial do Excel
-// bate com o horário certo, não importa o fuso de quem abrir a planilha.
-function paraCelulaHorarioBR(isoString) {
-  const partes = new Intl.DateTimeFormat('en-US', {
-    timeZone: FUSO_HORARIO,
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-    .formatToParts(new Date(isoString))
-    .reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
-  const hora = partes.hour === '24' ? '0' : partes.hour; // Intl às vezes devolve "24" pra meia-noite
-  return new Date(Date.UTC(1970, 0, 1, Number(hora), Number(partes.minute), Number(partes.second)));
-}
-
 // GET /api/relatorio-excel?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
 // Gera um .xlsx com duas abas: "Resumo do dia" (agrupado por caminhão/
 // escavadeira/corte/destino, somando viagens e volume) e "Resumo de cada
@@ -113,7 +91,6 @@ exports.handler = comTratamentoDeErro(async function (event) {
       escavadeira: v.escavadeira?.codigo || '',
       local: v.local_carga?.nome || '',
       destino: v.destino?.codigo || '',
-      destino_desc: v.destino?.descricao || '',
       viagens: 0,
       volumePorViagem: v.caminhao?.volume_aterro ?? null,
     };
@@ -128,7 +105,6 @@ exports.handler = comTratamentoDeErro(async function (event) {
     { header: 'Escavadeira', key: 'escavadeira', width: 12 },
     { header: 'Local de Carga/Corte', key: 'local', width: 20 },
     { header: 'Destino', key: 'destino', width: 12 },
-    { header: 'Descrição Destino', key: 'destino_desc', width: 22 },
     { header: 'Viagens', key: 'viagens', width: 10 },
     { header: 'Volume por Viagem', key: 'volume_por_viagem', width: 16 },
     { header: 'Volume no Aterro', key: 'volume_aterro', width: 16 },
@@ -143,7 +119,6 @@ exports.handler = comTratamentoDeErro(async function (event) {
       escavadeira: g.escavadeira,
       local: g.local,
       destino: g.destino,
-      destino_desc: g.destino_desc,
       viagens: g.viagens,
       volume_por_viagem: g.volumePorViagem ?? '',
       volume_aterro: volumeTotal,
@@ -167,15 +142,13 @@ exports.handler = comTratamentoDeErro(async function (event) {
     { header: 'Escavadeira', key: 'escavadeira', width: 12 },
     { header: 'Local de Carga/Corte', key: 'local', width: 20 },
     { header: 'Destino', key: 'destino', width: 12 },
-    { header: 'Descrição Destino', key: 'destino_desc', width: 22 },
     { header: 'Total de Viagens', key: 'total_viagens', width: 14 },
-    { header: 'Horário', key: 'horario', width: 12 },
     { header: 'Registrado em', key: 'registrado_em', width: 20 },
   ];
   sheet.getRow(1).font = { bold: true };
 
   for (const v of data) {
-    const linha = sheet.addRow({
+    sheet.addRow({
       operador: v.operador?.nome || '',
       data: v.data,
       ordem: v.ordem,
@@ -184,16 +157,9 @@ exports.handler = comTratamentoDeErro(async function (event) {
       escavadeira: v.escavadeira?.codigo || '',
       local: v.local_carga?.nome || '',
       destino: v.destino?.codigo || '',
-      destino_desc: v.destino?.descricao || '',
       total_viagens: v.total_viagens,
       registrado_em: formatarDataHoraBR(v.registrado_em),
     });
-    // Célula de hora "de verdade" (não texto) — aparece como 13:30:45 e
-    // pode ser usada em fórmula/ordenação, sem depender do fuso de quem
-    // abrir a planilha.
-    const celulaHorario = linha.getCell('horario');
-    celulaHorario.value = paraCelulaHorarioBR(v.registrado_em);
-    celulaHorario.numFmt = 'hh:mm:ss';
   }
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sheet.columns.length } };
 
