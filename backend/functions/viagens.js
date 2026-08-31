@@ -73,8 +73,13 @@ exports.handler = comTratamentoDeErro(async function (event) {
          operador:profiles!viagens_criado_por_fkey(id, nome)`,
         { count: 'exact' }
       )
+      // Mais recente primeiro nos dois níveis: dia mais recente no topo, e
+      // dentro do mesmo dia, a viagem lançada por último também no topo
+      // (Ordem decrescente) — antes vinha crescente, então o lançamento
+      // mais antigo do dia aparecia primeiro, obrigando a rolar a tela
+      // pra achar o mais recente.
       .order('data', { ascending: false })
-      .order('ordem', { ascending: true });
+      .order('ordem', { ascending: false });
 
     if (dataParam) {
       query = query.eq('data', dataParam);
@@ -206,7 +211,35 @@ exports.handler = comTratamentoDeErro(async function (event) {
       }
     }
 
-    const { data, error } = await supabase.from('viagens').update(payload).eq('id', id).select().single();
+    // Mudar a "data" de uma viagem via UPDATE direto (como era antes) não
+    // travava nada nem renumerava ninguém — deixava um buraco permanente na
+    // Ordem do dia de origem (o mesmo problema que a migration_009 corrigiu
+    // pra exclusão, mas continuava acontecendo aqui). mover_viagem_e_
+    // renumerar (migration_010) resolve isso: trava os dois dias envolvidos
+    // (evitando corrida com criar_viagem/excluir_viagem_e_renumerar rodando
+    // ao mesmo tempo em qualquer um dos dois), acrescenta a viagem no fim
+    // do dia novo, e fecha o buraco que sobrou no dia antigo. Roda antes do
+    // resto do payload — um "ordem" manual explícito (correção de sequência
+    // do admin) continua sendo aplicado depois, por cima, normalmente.
+    if (payload.data !== undefined) {
+      const { error: erroMover } = await supabase.rpc('mover_viagem_e_renumerar', { p_id: id, p_nova_data: payload.data });
+      if (erroMover) {
+        if (erroMover.message?.includes('viagem_nao_encontrada')) return json(404, { erro: 'Viagem não encontrada.' });
+        return json(500, { erro: 'Erro ao mover a viagem de dia.', detalhe: erroMover.message });
+      }
+    }
+
+    const payloadSemData = { ...payload };
+    delete payloadSemData.data;
+
+    let data, error;
+    if (Object.keys(payloadSemData).length > 0) {
+      ({ data, error } = await supabase.from('viagens').update(payloadSemData).eq('id', id).select().single());
+    } else {
+      // Só a data mudou (mover_viagem_e_renumerar já fez tudo) — só busca a
+      // linha atualizada pra devolver no mesmo formato de sempre.
+      ({ data, error } = await supabase.from('viagens').select().eq('id', id).single());
+    }
     if (error) {
       // unique(data, ordem): já existe outra viagem com essa Ordem nesse dia.
       if (error.code === '23505') {
@@ -223,8 +256,18 @@ exports.handler = comTratamentoDeErro(async function (event) {
     const id = event.queryStringParameters?.id;
     if (!id) return json(400, { erro: 'Informe o id da viagem.' });
 
-    const { error } = await supabase.from('viagens').delete().eq('id', id);
-    if (error) return json(500, { erro: 'Erro ao excluir viagem.', detalhe: error.message });
+    // excluir_viagem_e_renumerar (migration_009), não um DELETE direto —
+    // sem isso, excluir a Ordem 2 de um dia com 1,2,3,4,5 deixava um buraco
+    // (1,3,4,5) em vez de fechar a numeração (1,2,3,4). A function já cuida
+    // da trava por dia (pg_advisory_xact_lock), pelo mesmo motivo do
+    // criar_viagem: evita que um lançamento novo, chegando de outro
+    // operador nesse exato momento, calcule o próximo número no meio da
+    // renumeração.
+    const { error } = await supabase.rpc('excluir_viagem_e_renumerar', { p_id: id });
+    if (error) {
+      if (error.message?.includes('viagem_nao_encontrada')) return json(404, { erro: 'Viagem não encontrada.' });
+      return json(500, { erro: 'Erro ao excluir viagem.', detalhe: error.message });
+    }
     return json(200, { ok: true });
   }
 

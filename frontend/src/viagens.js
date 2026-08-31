@@ -409,6 +409,28 @@ const avisoErro = document.getElementById('aviso-form-erro');
 const avisoSucesso = document.getElementById('aviso-form-sucesso');
 const btnSalvar = document.getElementById('btn-salvar-viagem');
 
+// Esse elemento é compartilhado entre 2 avisos que não têm nada a ver um
+// com o outro: o de "salvei/atualizei essa viagem agora" (disparado pelo
+// submit do formulário) e o de "a fila sincronizou sozinha em segundo
+// plano" (disparado pela sincronização automática, ver
+// atualizarAvisoPendentes mais abaixo). Sem esse controle central, um
+// cronômetro de 6s deixado pendente por um desses avisos podia apagar o
+// OUTRO aviso que ficou visível depois dele — ex: a sincronização
+// automática mostra sua mensagem e agenda o "sumir" pra daqui a 6s; 2s
+// depois o usuário salva uma edição com sucesso, e aos 6s do primeiro
+// timer o aviso da edição (que devia ficar visível) some do nada. Toda
+// exibição passa por aqui, que sempre cancela o cronômetro anterior antes
+// de decidir se agenda um novo.
+let timerAvisoSucesso = null;
+function mostrarAvisoSucesso(texto, autoOcultarMs) {
+  clearTimeout(timerAvisoSucesso);
+  avisoSucesso.textContent = texto;
+  avisoSucesso.style.display = 'block';
+  timerAvisoSucesso = autoOcultarMs
+    ? setTimeout(() => { avisoSucesso.style.display = 'none'; }, autoOcultarMs)
+    : null;
+}
+
 // Campos de texto/data digitados diretamente (as seleções em combobox já
 // chamam agendarSalvarRascunho no próprio aoSelecionar, lá em montarCombos).
 form.addEventListener('input', agendarSalvarRascunho);
@@ -438,6 +460,7 @@ form.addEventListener('submit', async (ev) => {
   // único toque em "OK" confirmava as duas — gravando a viagem 2x.
   if (btnSalvar.disabled) return;
   avisoErro.style.display = 'none';
+  clearTimeout(timerAvisoSucesso);
   avisoSucesso.style.display = 'none';
 
   const caminhao_id = comboCaminhao.obterValor();
@@ -513,8 +536,7 @@ form.addEventListener('submit', async (ev) => {
           motorista_id,
         },
       });
-      avisoSucesso.textContent = 'Viagem atualizada com sucesso.';
-      avisoSucesso.style.display = 'block';
+      mostrarAvisoSucesso('Viagem atualizada com sucesso.');
       limparRascunho();
       document.getElementById('aviso-rascunho').style.display = 'none';
       sairModoEdicao();
@@ -537,13 +559,12 @@ form.addEventListener('submit', async (ev) => {
       const resultado = await salvarViagem(payload);
 
       if (resultado.pendente) {
-        avisoSucesso.textContent = 'Sem internet agora — viagem guardada no aparelho e será enviada automaticamente quando a conexão voltar.';
+        mostrarAvisoSucesso('Sem internet agora — viagem guardada no aparelho e será enviada automaticamente quando a conexão voltar.');
       } else {
-        avisoSucesso.textContent = `Viagem #${resultado.item.ordem} salva com sucesso.`;
+        mostrarAvisoSucesso(`Viagem #${resultado.item.ordem} salva com sucesso.`);
         await carregarResumoEViagens();
         await carregarHistorico(true);
       }
-      avisoSucesso.style.display = 'block';
       limparRascunho();
       document.getElementById('aviso-rascunho').style.display = 'none';
       sairModoEdicao();
@@ -742,12 +763,28 @@ document.getElementById('btn-limpar-filtros').addEventListener('click', () => {
 });
 
 // --- Aviso de pendentes ----------------------------------------------------
+// Quantas viagens estavam pendentes na última vez que a fila mudou — usado
+// só pra detectar a TRANSIÇÃO de "tinha pendente" pra "fila vazia", que é
+// quando vale mostrar a confirmação de sucesso (ver abaixo). Sem isso, não
+// tem como saber se "fila vazia" é porque acabou de sincronizar ou porque
+// nunca teve nada pendente.
+let quantidadePendenteAnterior = 0;
+
 function atualizarAvisoPendentes(fila) {
   const aviso = document.getElementById('aviso-pendentes');
   if (fila.length === 0) {
     aviso.style.display = 'none';
+    if (quantidadePendenteAnterior > 0) {
+      // Tinha pendente e a fila zerou sozinha — foi a sincronização
+      // automática que deu conta, sem nenhum clique. Sem esse aviso, quem
+      // lançou offline nunca tinha uma confirmação visual de que a viagem
+      // realmente chegou no servidor depois que a internet voltou.
+      mostrarAvisoSucesso('Viagens sincronizadas com sucesso!', 6000);
+    }
+    quantidadePendenteAnterior = 0;
     return;
   }
+  quantidadePendenteAnterior = fila.length;
   aviso.style.display = 'block';
   aviso.textContent = `${fila.length} viagem(ns) aguardando internet — assim que a conexão voltar, o envio é automático (não precisa tocar em nada).`;
 }

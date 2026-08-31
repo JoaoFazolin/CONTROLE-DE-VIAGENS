@@ -180,6 +180,153 @@ revoke all on function public.criar_viagem from public;
 grant execute on function public.criar_viagem to service_role;
 
 -- ----------------------------------------------------------------------------
+-- Excluir uma viagem SEM deixar buraco na "Ordem" do dia
+-- Excluir um lançamento (uso raro, só admin) tirava a linha, mas os
+-- lançamentos seguintes daquele dia continuavam com a Ordem antiga — ex:
+-- excluir a Ordem 2 de um dia com 1,2,3,4,5 deixava 1,3,4,5 (buraco no 2),
+-- confundindo quem lê o histórico ("por que pulou do 1 pro 3?"). Fecha o
+-- buraco renumerando 1..N os que sobraram, na mesma ordem relativa que já
+-- tinham — sem trocar a ORDEM entre eles, só a numeração fica contínua.
+-- Mesma trava por dia do criar_viagem, pelo mesmo motivo: evita que um
+-- INSERT (novo lançamento chegando nesse exato momento, de outro operador)
+-- calcule o próximo número contra um estado "no meio" da renumeração.
+-- ----------------------------------------------------------------------------
+create or replace function public.excluir_viagem_e_renumerar(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_data date;
+begin
+  -- "FOR UPDATE" trava a LINHA em si, não só o dia — sem isso, dava pra ler
+  -- a data dessa viagem aqui, e ANTES da trava do dia (linha seguinte) uma
+  -- chamada concorrente de mover_viagem_e_renumerar mudar a data dessa
+  -- mesma viagem pra outro dia. Essa function então travava e renumerava o
+  -- dia ERRADO (o antigo, que já não tinha mais buraco nenhum ali) e nunca
+  -- tocava no dia novo, que era onde o buraco de verdade ficou. Com o FOR
+  -- UPDATE, a outra chamada (que também trava a linha antes de decidir
+  -- quais dias mexer) espera essa transação terminar antes de prosseguir.
+  select data into v_data from public.viagens where id = p_id for update;
+  if v_data is null then
+    raise exception 'viagem_nao_encontrada';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(v_data::text));
+
+  delete from public.viagens where id = p_id;
+
+  -- Passo intermediário (+1000000): sem ele, a segunda atualização abaixo
+  -- violaria o unique(data, ordem) no meio do caminho — ex: renumerar a
+  -- Ordem 3 pra 2 enquanto a Ordem 2 (que vai virar 1) ainda não mudou,
+  -- colide direto com o valor 2 que já existe. Somar um deslocamento bem
+  -- maior que qualquer Ordem real tira todas do caminho uma da outra antes
+  -- de escrever os valores finais, sem mudar a ordem relativa entre elas.
+  with renumeradas as (
+    select id, row_number() over (order by ordem asc) as nova_ordem
+    from public.viagens
+    where data = v_data
+  )
+  update public.viagens v set ordem = v.ordem + 1000000
+  from renumeradas r where v.id = r.id;
+
+  with renumeradas as (
+    select id, row_number() over (order by ordem asc) as nova_ordem
+    from public.viagens
+    where data = v_data
+  )
+  update public.viagens v set ordem = r.nova_ordem
+  from renumeradas r where v.id = r.id;
+end;
+$$;
+
+revoke all on function public.excluir_viagem_e_renumerar from public;
+grant execute on function public.excluir_viagem_e_renumerar to service_role;
+
+-- ----------------------------------------------------------------------------
+-- Mudar a data de uma viagem (PUT) SEM deixar buraco na Ordem
+-- Corrigir a data de uma viagem (ex: motorista lançou com o aparelho na
+-- data errada) trocava só a coluna, com UPDATE direto — sem travar nada nem
+-- renumerar nada. Isso deixava um buraco permanente na Ordem do dia de
+-- origem (o mesmo problema que excluir_viagem_e_renumerar resolve pra
+-- exclusão, mas continuava acontecendo aqui), e podia até deixar a viagem
+-- "carregando" pro dia novo uma Ordem que não faz sentido lá (ex: Ordem 5
+-- chegando num dia que só tinha 1,2,3 — sem colidir com o unique, mas
+-- deixando um buraco no 4).
+-- ----------------------------------------------------------------------------
+create or replace function public.mover_viagem_e_renumerar(p_id uuid, p_nova_data date)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_data_antiga date;
+  v_hash_antigo integer;
+  v_hash_novo   integer;
+  v_nova_ordem  integer;
+begin
+  -- Mesmo motivo do FOR UPDATE em excluir_viagem_e_renumerar: trava a
+  -- linha antes de decidir quais dias mexer, fechando a mesma corrida na
+  -- direção contrária (uma exclusão concorrente dessa mesma viagem espera
+  -- essa transação terminar, em vez de enxergar uma data já desatualizada).
+  select data into v_data_antiga from public.viagens where id = p_id for update;
+  if v_data_antiga is null then
+    raise exception 'viagem_nao_encontrada';
+  end if;
+
+  if v_data_antiga = p_nova_data then
+    return; -- não mudou de dia — nada a mover nem renumerar
+  end if;
+
+  v_hash_antigo := hashtext(v_data_antiga::text);
+  v_hash_novo := hashtext(p_nova_data::text);
+
+  -- Trava os DOIS dias envolvidos, sempre na mesma ordem (hash menor
+  -- primeiro) — sem isso, duas chamadas concorrentes movendo em direções
+  -- opostas (uma de A pra B, outra de B pra A) podiam travar uma esperando
+  -- a outra pra sempre (deadlock).
+  if v_hash_antigo <= v_hash_novo then
+    perform pg_advisory_xact_lock(v_hash_antigo);
+    if v_hash_novo <> v_hash_antigo then
+      perform pg_advisory_xact_lock(v_hash_novo);
+    end if;
+  else
+    perform pg_advisory_xact_lock(v_hash_novo);
+    perform pg_advisory_xact_lock(v_hash_antigo);
+  end if;
+
+  -- Entra no fim do dia novo (mesmo critério do criar_viagem: próxima
+  -- Ordem livre) — evita criar buraco também no dia de destino.
+  select coalesce(max(ordem), 0) + 1 into v_nova_ordem
+  from public.viagens where data = p_nova_data;
+
+  update public.viagens set data = p_nova_data, ordem = v_nova_ordem where id = p_id;
+
+  -- Fecha o buraco que a mudança de dia deixou no dia de ORIGEM (mesma
+  -- lógica de excluir_viagem_e_renumerar, com o mesmo truque do +1000000
+  -- pra não violar o unique(data, ordem) no meio do caminho).
+  with renumeradas as (
+    select id, row_number() over (order by ordem asc) as nova_ordem
+    from public.viagens where data = v_data_antiga
+  )
+  update public.viagens v set ordem = v.ordem + 1000000
+  from renumeradas r where v.id = r.id;
+
+  with renumeradas as (
+    select id, row_number() over (order by ordem asc) as nova_ordem
+    from public.viagens where data = v_data_antiga
+  )
+  update public.viagens v set ordem = r.nova_ordem
+  from renumeradas r where v.id = r.id;
+end;
+$$;
+
+revoke all on function public.mover_viagem_e_renumerar from public;
+grant execute on function public.mover_viagem_e_renumerar to service_role;
+
+-- ----------------------------------------------------------------------------
 -- Alterar papel/status de um admin, com proteção atômica contra corrida
 -- Mesmo motivo do lock em criar_viagem: sem isso, checar "ainda sobra outro
 -- admin ativo?" e DEPOIS atualizar são duas chamadas separadas — com
