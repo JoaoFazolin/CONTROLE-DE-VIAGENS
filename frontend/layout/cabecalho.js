@@ -52,7 +52,7 @@ export function montarCabecalho(paginaAtiva) {
               }`
           )
           .join('')}
-        <button type="button" id="btn-sincronizar-agora" style="display:none;"><span id="lbl-sincronizar">Sincronizar</span> (<span id="qtd-pendentes">0</span>)</button>
+        <button type="button" id="btn-sincronizar-agora" style="display:none;" title="Opcional — o app já tenta sincronizar sozinho assim que há internet. Use isso só pra forçar agora."><span id="lbl-sincronizar">Sincronizar</span> (<span id="qtd-pendentes">0</span>)</button>
         <button type="button" id="btn-sair">Sair</button>
       </nav>
     </header>
@@ -96,11 +96,21 @@ export function montarCabecalho(paginaAtiva) {
   btnSincronizar.addEventListener('click', async () => {
     btnSincronizar.disabled = true;
     lblSincronizar.textContent = 'Sincronizando…';
-    // forcar:true — toque manual ignora o limite de tentativas automáticas
-    // (ver fila.js), então um item "travado" há muito tempo tenta de novo.
-    await tentarSincronizarFila({ forcar: true });
-    btnSincronizar.disabled = false;
-    lblSincronizar.textContent = 'Sincronizar';
+    try {
+      // forcar:true — toque manual ignora o limite de tentativas
+      // automáticas (ver fila.js), então um item "travado" há muito tempo
+      // tenta de novo.
+      await tentarSincronizarFila({ forcar: true });
+    } catch (erro) {
+      // Sem o try/catch aqui, qualquer erro inesperado dentro da
+      // sincronização (ex: falha ao salvar a fila atualizada no aparelho)
+      // deixava o botão preso em "Sincronizando…" pra sempre, mesmo que os
+      // itens já tivessem sido enviados com sucesso ao servidor.
+      console.warn('Erro ao sincronizar manualmente:', erro?.message);
+    } finally {
+      btnSincronizar.disabled = false;
+      lblSincronizar.textContent = 'Sincronizar';
+    }
   });
   // estado inicial (a página específica também chama iniciarSincronizacaoAutomatica())
   qtdPendentesEl.textContent = obterPendentes().length;

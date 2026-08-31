@@ -20,7 +20,6 @@ const campoFim = document.getElementById('campo-fim');
 const avisoErro = document.getElementById('aviso-erro');
 const avisoVolume = document.getElementById('aviso-volume');
 const btnExportar = document.getElementById('btn-exportar');
-const btnExportarPdf = document.getElementById('btn-exportar-pdf');
 
 const hoje = new Date();
 const primeiroDiaDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -140,16 +139,6 @@ btnExportar.addEventListener('click', () =>
     extensao: 'xlsx',
     botao: btnExportar,
     textoOriginal: 'Baixar planilha (.xlsx)',
-    textoGerando: 'Gerando…',
-  })
-);
-
-btnExportarPdf.addEventListener('click', () =>
-  exportarRelatorio({
-    endpoint: '/api/relatorio-pdf',
-    extensao: 'pdf',
-    botao: btnExportarPdf,
-    textoOriginal: 'Baixar PDF',
     textoGerando: 'Gerando…',
   })
 );

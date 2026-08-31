@@ -131,6 +131,20 @@ function montarCombos(cache) {
     }
   }
 
+  // Data sempre hoje pra quem lança na obra (motorista ou operador
+  // avançado) — evita lançamento com data errada (aparelho com data errada,
+  // ou tentativa de lançar num dia diferente). Só o admin corrige a data
+  // depois, editando o registro já lançado. `readOnly` sozinho não impede o
+  // seletor nativo de data em alguns navegadores (o indicador de calendário
+  // continua clicável mesmo com readOnly) — por isso também travamos o
+  // clique via pointer-events.
+  if (!ehGerente) {
+    campoData.value = dataDeHojeLocal();
+    campoData.readOnly = true;
+    campoData.style.background = '#f0f1f3';
+    campoData.style.pointerEvents = 'none';
+  }
+
   // Filtros do histórico só existem pra quem gerencia (motorista comum já
   // só vê as próprias viagens, filtro de motorista não faria sentido).
   if (ehGerente) {
@@ -191,7 +205,10 @@ function agendarSalvarRascunho() {
 // comboboxes (ver carregarCadastros logo abaixo).
 function aplicarEstadoAoFormulario(estado) {
   if (!estado) return;
-  if (estado.data) campoData.value = estado.data;
+  // Data só é restaurada do rascunho pra quem gerencia (admin) — pra quem
+  // lança na obra o campo fica travado em hoje (ver montarCombos), e um
+  // rascunho antigo com data de outro dia não pode sobrescrever isso.
+  if (estado.data && ehGerente) campoData.value = estado.data;
   // Campos travados (login de motorista de verdade, raro) não são
   // sobrescritos — o vínculo automático continua valendo.
   if (podeEscolherLivre) {
@@ -678,31 +695,38 @@ async function carregarHistorico(reiniciar) {
     corpoTabela.insertAdjacentHTML('beforeend', resultado.itens.map(linhaHtml).join(''));
     offsetHistorico += resultado.itens.length;
     linhaCarregarMais.style.display = resultado.tem_mais ? '' : 'none';
-
-    if (ehAdminEstrito) ligarBotoesLinha();
   } catch (erro) {
     console.warn('Não foi possível carregar o histórico agora:', erro.message);
   }
 }
 
-function ligarBotoesLinha() {
-  corpoTabela.querySelectorAll('button[data-editar]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const viagem = viagensCarregadas.find((v) => v.id === btn.dataset.editar);
+// Delegação de evento (um único listener no corpo da tabela, nunca nos
+// botões individuais) — antes, "Carregar mais" ACRESCENTA linhas (não
+// recria a tabela do zero, ver corpoTabela.insertAdjacentHTML acima) e
+// religava um listener novo em TODO botão do corpo a cada chamada,
+// inclusive nos das linhas já carregadas antes. Clicar em "Excluir" numa
+// linha carregada há duas páginas atrás disparava 2-3 confirm()/DELETE
+// empilhados pro mesmo id. Com delegação, o clique é tratado uma vez só,
+// não importa quantas vezes a tabela cresça.
+if (ehAdminEstrito) {
+  corpoTabela.addEventListener('click', async (ev) => {
+    const btnEditar = ev.target.closest('button[data-editar]');
+    if (btnEditar) {
+      const viagem = viagensCarregadas.find((v) => v.id === btnEditar.dataset.editar);
       if (viagem) entrarModoEdicao(viagem);
-    });
-  });
-  corpoTabela.querySelectorAll('button[data-excluir]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+      return;
+    }
+    const btnExcluir = ev.target.closest('button[data-excluir]');
+    if (btnExcluir) {
       if (!confirm('Excluir esta viagem?')) return;
       try {
-        await chamarApi(`/api/viagens?id=${btn.dataset.excluir}`, { metodo: 'DELETE' });
+        await chamarApi(`/api/viagens?id=${btnExcluir.dataset.excluir}`, { metodo: 'DELETE' });
         await carregarResumoEViagens();
         await carregarHistorico(true);
       } catch (erro) {
         alert(erro.message || 'Erro ao excluir.');
       }
-    });
+    }
   });
 }
 
@@ -725,7 +749,7 @@ function atualizarAvisoPendentes(fila) {
     return;
   }
   aviso.style.display = 'block';
-  aviso.textContent = `${fila.length} viagem(ns) aguardando internet para sincronizar.`;
+  aviso.textContent = `${fila.length} viagem(ns) aguardando internet — assim que a conexão voltar, o envio é automático (não precisa tocar em nada).`;
 }
 aoMudarFila(atualizarAvisoPendentes);
 

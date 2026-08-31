@@ -6,7 +6,10 @@
 import { chamarApi, ErroApi } from './api.js';
 
 const CHAVE_FILA = 'lrcv_fila_pendentes';
-const INTERVALO_FLUSH_MS = 30 * 1000;
+// 15s (era 30s) — em obra a conexão costuma ser instável e intermitente;
+// um intervalo mais curto faz o item sumir da tela sozinho mais rápido,
+// sem precisar de nenhum toque manual.
+const INTERVALO_FLUSH_MS = 15 * 1000;
 
 const ouvintes = new Set();
 
@@ -21,7 +24,19 @@ function lerFila() {
 }
 
 function salvarFila(fila) {
-  localStorage.setItem(CHAVE_FILA, JSON.stringify(fila));
+  // Sem o try/catch, um localStorage.setItem que falhar (quota de
+  // armazenamento excedida — plausível num tablet usado offline por muito
+  // tempo acumulando fila + cadastros + rascunho — ou modo privado do
+  // Safari/iOS) derrubava a promise de tentarSincronizarFila com erro. O
+  // toque manual em "Sincronizar" no cabeçalho (cabecalho.js) não tinha
+  // try/catch em volta do await, e ficava com o botão preso em
+  // "Sincronizando…" pra sempre, mesmo com os itens já enviados de verdade
+  // ao servidor (só a atualização local da fila é que falhou).
+  try {
+    localStorage.setItem(CHAVE_FILA, JSON.stringify(fila));
+  } catch (erro) {
+    console.warn('Não foi possível salvar a fila de pendentes no aparelho:', erro.message);
+  }
   notificar();
 }
 
@@ -90,6 +105,7 @@ function enfileirar(payload) {
 const LIMITE_TENTATIVAS_AUTOMATICAS = 8;
 
 let sincronizando = false;
+let promessaAtual = null;
 
 /**
  * @param {{ forcar?: boolean }} opcoes forcar:true ignora o limite de
@@ -98,12 +114,23 @@ let sincronizando = false;
  */
 export async function tentarSincronizarFila(opcoes = {}) {
   const { forcar = false } = opcoes;
-  if (sincronizando) return;
+  if (sincronizando) {
+    // Com o intervalo automático mais curto (15s) e a rajada de
+    // retentativas ao reconectar, ficou bem mais provável de um toque
+    // manual em "Sincronizar agora" (forcar:true) cair bem no meio de uma
+    // tentativa automática já em andamento. Antes isso era simplesmente
+    // ignorado — o botão parecia ter rodado, mas nada acontecia. Agora,
+    // quando é um toque forçado, espera a tentativa atual terminar e tenta
+    // de novo (respeitando forcar:true, então ignora o limite de
+    // tentativas mesmo que a rodada automática que acabou de passar não).
+    if (forcar) return promessaAtual ? promessaAtual.then(() => tentarSincronizarFila(opcoes)) : undefined;
+    return;
+  }
   const filaInicial = lerFila();
   if (filaInicial.length === 0) return;
 
   sincronizando = true;
-  try {
+  promessaAtual = (async () => {
     const idsSincronizados = new Set();
     const atualizacoesFalha = new Map();
     let semRedeNoMeioDoCaminho = false;
@@ -138,16 +165,37 @@ export async function tentarSincronizarFila(opcoes = {}) {
       .filter((item) => !idsSincronizados.has(item.id))
       .map((item) => (atualizacoesFalha.has(item.id) ? { ...item, ...atualizacoesFalha.get(item.id) } : item));
     salvarFila(restantes);
-  } finally {
+  })().finally(() => {
     sincronizando = false;
-  }
+    promessaAtual = null;
+  });
+  return promessaAtual;
+}
+
+// Assim que o evento "online" dispara, a conexão às vezes ainda não está
+// realmente utilizável por um instante (handoff wifi/dados, captive
+// portal etc) — uma única tentativa nesse momento pode falhar de novo por
+// falta de rede mesmo já "online". Em vez de esperar o próximo intervalo de
+// 15s, tenta de novo algumas vezes rapidinho logo em seguida, sem precisar
+// de nenhum toque manual.
+function tentarComRajadaDeRetentativas() {
+  tentarSincronizarFila();
+  [2000, 5000, 10000].forEach((atraso) => setTimeout(tentarSincronizarFila, atraso));
 }
 
 export function iniciarSincronizacaoAutomatica() {
-  window.addEventListener('online', tentarSincronizarFila);
+  window.addEventListener('online', tentarComRajadaDeRetentativas);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') tentarSincronizarFila();
   });
+  // 'focus'/'pageshow' cobrem o caso comum no celular de minimizar o app
+  // (ou trocar de aba) com a tela ainda "visível" tecnicamente, mas o
+  // navegador pausa os timers em segundo plano — sem isso, a fila só
+  // sincronizava de novo quando a pessoa reabria o app manualmente E esse
+  // reabrir disparava visibilitychange, o que nem sempre acontece (ex:
+  // Safari/iOS em alguns cenários dispara só 'pageshow').
+  window.addEventListener('focus', () => tentarSincronizarFila());
+  window.addEventListener('pageshow', () => tentarSincronizarFila());
   setInterval(tentarSincronizarFila, INTERVALO_FLUSH_MS);
   tentarSincronizarFila();
 }

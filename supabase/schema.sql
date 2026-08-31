@@ -87,6 +87,10 @@ create index if not exists idx_viagens_data on public.viagens (data);
 create index if not exists idx_viagens_motorista on public.viagens (motorista_id);
 create index if not exists idx_viagens_caminhao on public.viagens (caminhao_id);
 create index if not exists idx_viagens_destino on public.viagens (destino_id);
+-- criado_por é o filtro mais usado no dia a dia: todo GET de /api/viagens e
+-- /api/resumo-dia feito por um Operador Avançado (quem realmente loga e
+-- lança, na prática) filtra por "o que EU mesmo lancei", não por motorista.
+create index if not exists idx_viagens_criado_por on public.viagens (criado_por);
 
 -- ----------------------------------------------------------------------------
 -- Sequência de "Ordem" travada com pg_advisory_xact_lock

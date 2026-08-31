@@ -27,7 +27,8 @@ lr-controle-viagens/
 │   ├── migration_004_motorista_sem_login.sql         # rodar depois da migration_003
 │   ├── migration_005_correcoes_de_bugs.sql           # rodar depois da migration_004
 │   ├── migration_006_protecao_atomica_admin.sql      # rodar depois da migration_005
-│   └── migration_007_validar_cadastro_ativo_em_viagem.sql # rodar depois da migration_006
+│   ├── migration_007_validar_cadastro_ativo_em_viagem.sql # rodar depois da migration_006
+│   └── migration_008_indice_criado_por.sql           # rodar depois da migration_007
 ├── test-api.js       # diagnóstico rápido do backend (node test-api.js)
 └── netlify.toml       # config de build/rotas da Netlify (precisa ficar na raiz)
 ```
@@ -55,8 +56,9 @@ lr-controle-viagens/
    6. `supabase/migration_005_correcoes_de_bugs.sql`
    7. `supabase/migration_006_protecao_atomica_admin.sql`
    8. `supabase/migration_007_validar_cadastro_ativo_em_viagem.sql`
+   9. `supabase/migration_008_indice_criado_por.sql`
 
-   (`schema.sql` já nasce com essas correções — rodar as migrações 005-007
+   (`schema.sql` já nasce com essas correções — rodar as migrações 005-008
    num projeto novo é redundante mas inofensivo. O que importa de verdade é
    rodá-las num projeto **já existente**, criado antes delas existirem —
    sem isso, as correções mais recentes de bugs não valem pra esse banco.)
